@@ -1,0 +1,14 @@
+sudo: false
+language: bash
+dist: trusty
+
+before_install:
+    - mkdir -p ~/R/library && echo '.libPaths(c("~/R/library", .libPaths()))' >> ~/.Rprofile # Pick a writable dir for R packages
+
+install:
+    - bash setup.sh --help
+    - bash setup.sh
+    - bash setup.sh # Running again should do nothing
+
+script:
+    - bash test/test.sh
