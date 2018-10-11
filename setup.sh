@@ -88,6 +88,7 @@ fi
 # ====================
 
 cwd=`pwd`
+mkdir -p tmp
 
 # R packages
 cd ${cwd}

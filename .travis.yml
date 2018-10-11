@@ -15,4 +15,4 @@ install:
     - bash setup.sh # Running again should do nothing
 
 script:
-    - bash test/test.sh
+    - cd test && bash test.sh
