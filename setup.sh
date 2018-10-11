@@ -87,6 +87,21 @@ fi
 # End argument parsing
 # ====================
 
+function install_htslib(){
+    # Download and install htslib. Compiled stuff is in `pwd`/htslib 
+    pushd .
+    rm -f htslib-1.8.tar.bz2
+    wget https://github.com/samtools/htslib/releases/download/1.8/htslib-1.8.tar.bz2
+    tar xf htslib-1.8.tar.bz2
+    rm htslib-1.8.tar.bz2
+    mv htslib-1.8 htslib
+    cd htslib
+    ./configure --prefix=`pwd`
+    make -j 4
+    make install
+    popd 
+}
+
 cwd=`pwd`
 mkdir -p tmp
 
