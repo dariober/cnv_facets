@@ -31,7 +31,6 @@ rm -rf test_out
 ls test_out/out.vcf.gz
 ls test_out/out.cnv.png
 ls test_out/out.spider.pdf
-ls test_out/out.csv.gz
 
 rm -rf test_out
 
