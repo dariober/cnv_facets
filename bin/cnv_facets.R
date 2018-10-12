@@ -137,7 +137,11 @@ readSnpMatrix2<- function(pileup){
         conn<- pileup
     }
     close(xf)
+    
+    options(datatable.fread.input.cmd.message= FALSE)
     rcmat<- fread(conn, select= c('Chromosome', 'Position', 'File1R', 'File1A', 'File2R', 'File2A'))
+    options(datatable.fread.input.cmd.message= TRUE)
+
     setnames(rcmat, c('File1R', 'File1A', 'File2R', 'File2A'),
                     c('NOR.RD', 'NOR.DP', 'TUM.RD', 'TUM.DP'))
     rcmat[, NOR.DP := NOR.DP + NOR.RD]

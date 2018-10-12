@@ -87,6 +87,22 @@ fi
 # End argument parsing
 # ====================
 
+function check_bin_dir(){
+    # USAGE: check_bin_dir /foo/bar
+    # 
+    # Check `/foo/bar` is on PATH. If it is on PATH but it does not exist,
+    # try to create it
+    python -c "import os, sys
+PATH= os.environ['PATH'].split(os.path.pathsep)
+PATH= [os.path.abspath(x) for x in PATH]
+bin= os.path.abspath('$1')
+if bin not in PATH:
+    sys.stderr.write('\n\033[31mError: bin directory requested by -b/--bin_dir \'$1\' is not on PATH\033[0m\n')
+    sys.exit(1)
+os.makedirs(bin, exist_ok=True) 
+"
+}
+
 function install_htslib(){
     # Download and install htslib. Compiled stuff is in `pwd`/htslib 
     pushd .
@@ -101,6 +117,10 @@ function install_htslib(){
     make install
     popd 
 }
+
+# =======================
+
+check_bin_dir ${bin_dir}
 
 cwd=`pwd`
 mkdir -p tmp

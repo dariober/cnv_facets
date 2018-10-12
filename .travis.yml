@@ -15,4 +15,5 @@ install:
     - bash setup.sh # Running again should do nothing
 
 script:
+    - bash setup.sh -b foo/bar || true 2> err.log && grep --silent 'Error'
     - cd test && bash test.sh
