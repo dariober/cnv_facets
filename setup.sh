@@ -99,7 +99,8 @@ bin= os.path.abspath('$1')
 if bin not in PATH:
     sys.stderr.write('\n\033[31mError: bin directory requested by -b/--bin_dir \'$1\' is not on PATH\033[0m\n')
     sys.exit(1)
-os.makedirs(bin, exist_ok=True) 
+if not os.path.isdir(bin):
+    os.makedirs(bin) 
 "
 }
 
@@ -138,9 +139,11 @@ then
     git clone https://github.com/mskcc/facets.git
     cd facets/inst/extcode/
     install_htslib
-    g++ -std=c++11 -I`pwd`/htslib/include snp-pileup.cpp \
-        -L`pwd`/htslib/lib -lhts -Wl,-rpath=`pwd`/htslib/lib -o snp-pileup
-    ln -sf `pwd`/snp-pileup ${bin_dir}/
+    g++ -std=c++11 -I `pwd`/htslib/include snp-pileup.cpp -L `pwd`/htslib/lib -lhts -o snp-pileup -lcurl -lz -lpthread -lcrypto -llzma -lbz2
+    #g++ -std=c++11 -I`pwd`/htslib/include snp-pileup.cpp \
+    #    -L`pwd`/htslib/lib -lhts -Wl,-rpath=`pwd`/htslib/lib -o snp-pileup
+    cp `pwd`/snp-pileup ${bin_dir}/
+    rm -rf `pwd`/htslib
 fi
 command -v snp-pileup
 snp-pileup --help
@@ -152,4 +155,5 @@ rsync --update bin/cnv_facets.R ${bin_dir}
 cnv_facets.R --help
 
 set +x
+rm -rf tmp
 echo -e "\n\033[32mSetup successfully completed\033[0m\n"
