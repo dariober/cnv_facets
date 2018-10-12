@@ -139,9 +139,8 @@ then
     git clone https://github.com/mskcc/facets.git
     cd facets/inst/extcode/
     install_htslib
-    g++ -std=c++11 -I `pwd`/htslib/include snp-pileup.cpp -L `pwd`/htslib/lib -lhts -o snp-pileup -lcurl -lz -lpthread -lcrypto -llzma -lbz2
-    #g++ -std=c++11 -I`pwd`/htslib/include snp-pileup.cpp \
-    #    -L`pwd`/htslib/lib -lhts -Wl,-rpath=`pwd`/htslib/lib -o snp-pileup
+    ln -s `pwd`/htslib/lib/libhts.a `pwd`/htslib/lib/libhts-static.a
+    g++ -std=c++11 -I `pwd`/htslib/include snp-pileup.cpp -L `pwd`/htslib/lib -lhts-static -o snp-pileup -lcurl -lz -lpthread -lcrypto -llzma -lbz2
     cp `pwd`/snp-pileup ${bin_dir}/
     rm -rf `pwd`/htslib
 fi
