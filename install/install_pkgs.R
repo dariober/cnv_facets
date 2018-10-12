@@ -24,7 +24,7 @@
 
 
 tryCatch({
-        library(Rsamtools)
+        suppressMessages(library(Rsamtools))
     }, error = function(err) {
         source("https://bioconductor.org/biocLite.R")
         biocLite("Rsamtools")
@@ -32,14 +32,14 @@ tryCatch({
 )
 
 tryCatch({
-        library(data.table)
+        suppressMessages(library(data.table))
     }, error = function(err) {
         install.packages('data.table', repos='http://cran.r-project.org')
     }
 )
 
 tryCatch({
-        library(argparse)
+        suppressMessages(library(argparse))
     }, error = function(err) {
         install.packages('argparse', repos='http://cran.r-project.org')
     }
@@ -47,14 +47,14 @@ tryCatch({
 
 tryCatch({
         # devtools only necessary to install other packages.
-        library(devtools)
+        suppressMessages(library(devtools))
     }, error = function(err) {
         install.packages('devtools', repos='http://cran.r-project.org')
     }
 )
 
 tryCatch({
-        library(facets)
+        suppressMessages(library(facets))
     }, error = function(err) {
         devtools::install_github("mskcc/facets")
     }
