@@ -44,10 +44,6 @@ case $key in
         shift # past argument
         shift # past value
     ;;
-    -wb|--with_bats)
-        with_bats=1
-        shift # past argument
-    ;;
     -xt|--skip_test)
         skip_test=1
         shift 
@@ -78,8 +74,6 @@ found are not re-installed but their version is not checked.
 -b|--bin_dir     Install missing programs here. This dir should writable and on
                  your PATH. Default $bin_dir
 -xt|--skip_test  Do not run the test suite at the end of the installation
--wb|--with_bats  Also install the bats testing framework. Only necessary to run
-                 the tests suite 
 -v|--version     Show version
 -h|--help        Show help
 
@@ -95,11 +89,6 @@ if [[ $version == 1 ]]
 then
     echo "$PG $VERSION"
     exit 0
-fi
-
-if [[ $skip_test != 1 ]]
-then
-    with_bats=1
 fi
 
 # End argument parsing
@@ -171,31 +160,14 @@ chmod a+x bin/cnv_facets.R
 rsync --update bin/cnv_facets.R ${bin_dir}
 cnv_facets.R --help
 
-# BATS - only needed for unit test
-if [[ $with_bats == 1 ]]
-then
-    cd ${cwd}
-    found=`command -v bats` || true
-    if [[ -z $found ]]
-    then
-        rm -rf bats
-        git clone https://github.com/sstephenson/bats.git
-        cd bats
-        ./install.sh `dirname ${bin_dir}`
-        rm -rf bats
-    fi
-    command -v bats
-    bats --help
-fi
-
 set +x
 rm -rf tmp
-echo -e "\n\033[32mSetup successfully completed\033[0m\n"
+echo -e "\n\033[32mSetup successfully completed\033[0m"
 
 if [[ $skip_test != 1 ]]
 then
     echo -e "\n\033[1mExecuting test suite...\033[0m\n"
     cd ${cwd}/test
-    bats test.bats
+    python test.py
 fi
 

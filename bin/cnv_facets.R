@@ -87,6 +87,10 @@ to the median insert size of the libraries. 250 is facets default based on\\n\\
 exome data. For whole genome consider increasing to 500 and for target\\n\\
 sequencing decrease to 150. Default %s', def), type= 'integer', default= def)
 
+parser$add_argument('--annotation', '-a', help= sprintf('Optional annotation file in BED format where the 4th column contains the\\n\\
+feature name (e.g. gene name). CNVs will be annotated with an additional \\n\\
+INFO/TAG reporting all the overalapping features'), type= 'character', required= FALSE)
+
 parser$add_argument('--fai', '-f', help= sprintf('Tab separated file listing reference contigs (1st column) and their size (2nd column). \\n\\
 The genome fasta index .fai is suitable. This option is used to write contigs \\n\\
 in the VCF header, not required but recommended. If NULL and bam files are used \\n\\
@@ -129,7 +133,7 @@ exec_snp_pileup<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, p
     return(status)
 }
 
-readSnpMatrix2<- function(pileup){
+readSnpMatrix2<- function(pileup, gbuild){
     xf<- file(pileup, open= 'r')
     if(summary(xf)$class == 'gzfile'){
         conn<- sprintf('gunzip -c %s', pileup)
@@ -146,9 +150,23 @@ readSnpMatrix2<- function(pileup){
                     c('NOR.RD', 'NOR.DP', 'TUM.RD', 'TUM.DP'))
     rcmat[, NOR.DP := NOR.DP + NOR.RD]
     rcmat[, TUM.DP := TUM.DP + TUM.RD]
-    rcmat[, Chromosome := sub("chr", "", Chromosome, fixed= TRUE)]
+
+    chr_prefix<- any(rcmat$Chromosome %in% c(paste0('chr', 1:22), 'chrX'))
+
+    # Unfortunately, facets needs numeric chromsomes. X will be converted later by facets
+    rcmat[, Chromosome := sub("^chr", "", Chromosome)]
     setcolorder(rcmat, c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD'))
-    return(rcmat)
+
+    # We only keep the major chromosomes 
+    if(gbuild %in% c("hg19", "hg38", "hg18")){
+        rcmat<- rcmat[Chromosome %in% c(1:22, 'X')]
+    } else if(gbuild %in% c("mm9", "mm10")){
+        rcmat<- rcmat[Chromosome %in% c(1:19, 'X')]
+    } else {
+        write(sprintf('Invalid genome build: %s', gbuild), stderr())
+        quit(status= 1)
+    }
+    return(list(pileup= rcmat, chr_prefix= chr_prefix))
 }
 
 facetsRecordToVcf<- function(x){
@@ -176,14 +194,57 @@ facetsRecordToVcf<- function(x){
         ';MAF_R_CLUST=', ifelse(is.na(x$mafR.clust), '.', round(x$mafR.clust, 3)), 
         ';CF_EM=', ifelse(is.na(x$cf.em), '.', round(x$cf.em, 3)),
         ';TCN_EM=', ifelse(is.na(x$tcn.em), '.', x$tcn.em),
-        ';LCN_EM=', ifelse(is.na(x$lcn.em), '.', x$lcn.em))
-   return(vcf)
+        ';LCN_EM=', ifelse(is.na(x$lcn.em), '.', x$lcn.em),
+        ';CNV_ANN=', ifelse(is.na(x$annotation), '.', x$annotation))
+    return(vcf)
 }
 
 getScriptName<- function(){
     opt<- grep('^--file=', commandArgs(trailingOnly = FALSE), value= TRUE)
     name<- basename(sub('^--file=', '', opt))
     return(name)
+}
+
+annotate<- function(cnv, bed_file){
+    # Annotate data.table cnv with the features in bed_file
+
+    ann<- data.table(read.table(bed_file, comment.char= '#', header= FALSE, sep= '\t', stringsAsFactors= FALSE, na.strings= ""))
+    stopifnot(ncol(ann) >= 4)
+    ann<- ann[, 1:4]
+    setnames(ann, names(ann), c('chrom', 'start', 'end', 'name'))
+    ann<- ann[!is.na(name)]
+
+    # Make feature names VCF compliant. From https://samtools.github.io/hts-specs/VCFv4.1.pdf:
+    #
+    #     String, no white-space, semi-colons, or equals-signs permitted; commas are
+    #     permitted only as delimiters for lists of values
+    #
+    # Convert special characters using URL encoding
+    ann[, name := gsub('%', '%25', name, fixed= TRUE)]
+    ann[, name := gsub(',', '%2C', name, fixed= TRUE)]
+    ann[, name := gsub('=', '%3D', name, fixed= TRUE)]
+    ann[, name := gsub(';', '%3B', name, fixed= TRUE)]
+    ann[, name := gsub('|', '%7C', name, fixed= TRUE)]
+    ann[, name := gsub(' ', '_', name, fixed= TRUE)] # NB: Not URL encoding for spaces!
+
+    ann<- makeGRangesFromDataFrame(ann, seqnames.field= 'chrom', start.field= 'start', end.field= 'end', keep.extra.columns= TRUE)
+
+    gcnv<- makeGRangesFromDataFrame(cnv, seqnames.field= 'chrom', start.field= 'start', end.field= 'end', keep.extra.columns= TRUE)
+    ovl<- findOverlaps(query= gcnv, subject= ann, ignore.strand= TRUE)
+
+    hits<- data.table(queryHits= ovl@from, subjectHits= ovl@to, feature= ann$name[ovl@to])
+    hits<- hits[, list(feature= paste(feature,  collapse= ',')), by= queryHits]
+    gcnv<- as.data.table(gcnv)
+    gcnv[, annotation := NA]
+    gcnv$annotation[hits$queryHits]<- hits$feature
+    gcnv$annotation[gcnv$type == 'NEUTR']<- NA
+    setnames(gcnv, 'seqnames', 'chrom')
+    gcnv[, chrom := as.character(chrom)]
+
+    stopifnot(cnv$chrom == gcnv$chrom)
+    stopifnot(cnv$start == gcnv$start)
+    stopifnot(cnv$end == gcnv$end)
+    return(gcnv)
 }
 
 # ---------------- [Validate arguments] -------------
@@ -239,13 +300,13 @@ if(is.null(xargs$pileup)){
 }
 
 write(sprintf('Loading file %s...', pileup), stderr())
-rcmat<- readSnpMatrix2(pileup)
+rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
 
 # ------------- [Run FACETS] --------------
 
 write(sprintf('Preprocessing sample...'), stderr())
-xx<- preProcSample(rcmat, ndepth= xargs$depth[1], gbuild= xargs$gbuild, snp.nbhd= xargs$nbhd_snp, het.thresh= 0.25, cval= xargs$cval[1], deltaCN= 0, unmatched= FALSE, ndepthmax= xargs$depth[2])
-rm(rcmat)
+xx<- preProcSample(rcmat[['pileup']], ndepth= xargs$depth[1], gbuild= xargs$gbuild, snp.nbhd= xargs$nbhd_snp, het.thresh= 0.25, cval= xargs$cval[1], deltaCN= 0, unmatched= FALSE, ndepthmax= xargs$depth[2])
+rcmat[['pileup']]<- NULL
 x_ <- gc(verbose= FALSE)
 
 write(sprintf('Processing sample...'), stderr())
@@ -258,9 +319,19 @@ fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps=1e-3)
 
 write(sprintf('Writing output'), stderr())
 out<- data.table(fit$cncf)
-stopifnot(all(!grepl('chr', out$chrom)))
-out[, chrom := paste0('chr', chrom)]
-out[, chrom := sub('chr23', 'chrX', chrom)] # This is because of bug https://github.com/mskcc/facets/issues/60
+
+# Reset chrom X
+if(xargs$gbuild %in% c('hg18', 'hg19', 'hg38')){
+    out[, chrom := ifelse(chrom == 23, 'X', chrom)]
+} else if(xargs$gbuild %in% c('mm9', 'mm10')){
+    out[, chrom := ifelse(chrom == 20, 'X', chrom)]
+} else {
+    quit(status= 1)
+}
+# Reset chrom names
+if(rcmat$chr_prefix == TRUE){
+    out[, chrom := paste0('chr', chrom)]
+}
 setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
 
 # Classify CNV. See also https://github.com/mskcc/facets/issues/62
@@ -273,6 +344,10 @@ out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
 out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
 out<- out[order(chrom, start)]
 stopifnot(all(!is.na(out$type))) # Everything has been classified
+
+if(is.null(xargs$annotation) == FALSE){
+    out<- annotate(out, xargs$annotation)
+}
 
 vcf_tmp<- tempfile(pattern= paste0(basename(xargs$out), '.'), tmpdir= dirname(xargs$out), fileext= '.vcf')
 
@@ -312,6 +387,7 @@ write('##INFO=<ID=SEGCLUST,Number=1,Type=Integer,Description="Segment cluster to
 write('##INFO=<ID=CF_EM,Number=1,Type=Float,Description="Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid">', vcf_tmp, append= TRUE)
 write('##INFO=<ID=TCN_EM,Number=1,Type=Integer,Description="Total copy number. 2 for normal diploid">', vcf_tmp, append= TRUE)
 write('##INFO=<ID=LCN_EM,Number=1,Type=Integer,Description="Lesser (minor) copy number. 1 for normal diploid">', vcf_tmp, append= TRUE)
+write('##INFO=<ID=CNV_ANN,Number=.,Type=String,Description="Annotation features assigned to this CNV">', vcf_tmp, append= TRUE)
 
 write(paste0('##purity=', fit$purity), vcf_tmp, append= TRUE)
 write(paste0('##ploidy=', fit$ploidy), vcf_tmp, append= TRUE)
@@ -319,6 +395,7 @@ write(paste0('##dipLogR=', fit$dipLogR), vcf_tmp, append= TRUE)
 write(paste0('##emflags="', fit$emflags, '"'), vcf_tmp, append= TRUE)
 
 write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO', vcf_tmp, append= TRUE)
+
 for(i in 1:nrow(out)){
     write(paste(facetsRecordToVcf(out[i]), collapse= '\t'), vcf_tmp, append= TRUE)
 }
