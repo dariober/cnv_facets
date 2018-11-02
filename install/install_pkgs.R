@@ -34,14 +34,14 @@ tryCatch({
 tryCatch({
         suppressMessages(library(data.table))
     }, error = function(err) {
-        install.packages('data.table', repos='http://cran.r-project.org')
+        install.packages('data.table', repos='https://cran.r-project.org')
     }
 )
 
 tryCatch({
         suppressMessages(library(argparse))
     }, error = function(err) {
-        install.packages('argparse', repos='http://cran.r-project.org')
+        install.packages('argparse', repos='https://cran.r-project.org')
     }
 )
 
@@ -49,7 +49,7 @@ tryCatch({
         # devtools only necessary to install other packages.
         suppressMessages(library(devtools))
     }, error = function(err) {
-        install.packages('devtools', repos='http://cran.r-project.org')
+        install.packages('devtools', repos='https://cran.r-project.org')
     }
 )
 

@@ -49,18 +49,18 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
 
-    def testParallel(self):
-        p = sp.Popen("../bin/cnv_facets.R -N 2 -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out.csv.gz'))
-
-        p = sp.Popen("../bin/cnv_facets.R -N 2 -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out1", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out1.csv.gz'))
-
-        self.assertTrue(filecmp.cmp('test_out/out1.csv.gz', 'test_out/out.csv.gz'), shallow= False)
+    #def testParallel(self):
+    #    p = sp.Popen("../bin/cnv_facets.R -N 2 -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+    #    stdout, stderr = p.communicate()
+    #    self.assertEqual(0, p.returncode)
+    #    self.assertTrue(os.path.exists('test_out/out.csv.gz'))
+    #
+    #    p = sp.Popen("../bin/cnv_facets.R -N 1 -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out1", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+    #    stdout, stderr = p.communicate()
+    #    self.assertEqual(0, p.returncode)
+    #    self.assertTrue(os.path.exists('test_out/out1.csv.gz'))
+    #
+    #    self.assertTrue(filecmp.cmp('test_out/out1.csv.gz', 'test_out/out.csv.gz'), shallow= False)
 
     def testBamInput(self):
         p = sp.Popen("../bin/cnv_facets.R -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)

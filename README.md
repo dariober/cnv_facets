@@ -13,6 +13,7 @@ Somatic copy variant caller for next generation sequencing data based on the
     * [Option 1: BAM & VCF input](#option-1-bam--vcf-input)
     * [Option 2: Pileup input](#option-2-pileup-input)
 * [Output](#output)
+* [Time & memory footprint](#time--memory-footprint)
 * [References](#references)
 
 <!-- vim-markdown-toc -->
@@ -118,6 +119,23 @@ cnv_facets.R -p <pileup.csv.gz> -o <output_prefix> [...]
 
 Output
 ======
+
+Time & memory footprint
+=======================
+
+The analysis of a whole genome sequence of a human tumour-normal pair where the
+tumour is sequenced at ~80x (~2 billion reads, BAM file ~200 GB) and the normal
+at ~40x (~1 billion reads, BAM files ~100 GB) with ~37 million SNPs (from dbSNP
+`common_all_20180418.vcf.gz`) and with no filtering on read depth and read
+quality requires:
+
+* 5 hours to prepare the SNP pileup (small memory footprint since BAM and VCF
+  files are processed serially). Time is mostly driven by the size of the BAM files
+
+* 1 hour and ~15 GB of memory for the actual detection of CNVs starting from
+  the pileup. Time and memory is mostly driven by the number of SNPs
+
+This is A typical targeted sequencing datasets wi
 
 References
 ==========
