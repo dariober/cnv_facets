@@ -228,7 +228,7 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     chrom_nbam<- file.path(d, paste0(sub('\\.bam', '', basename(normal_bam)), '.', chrom, '.bam'))
     chrom_tbam<- file.path(d, paste0(sub('\\.bam', '', basename(tumour_bam)), '.', chrom, '.bam'))
 
-    cmd<- c('set -e', '\n',
+    cmd<- c('set -eo pipefail', '\n',
             'mkfifo', chrom_vcf, '\n',
             'mkfifo', chrom_nbam, '\n',
             'mkfifo', chrom_tbam, '\n',
@@ -332,7 +332,7 @@ concat_csv<- function(csv_list, xfile, tmpdir){
     col.names<- TRUE
     for(csv in csv_list){
         options(datatable.fread.input.cmd.message= FALSE)
-        fwrite(x= fread(sprintf('gzip -d -c %s', csv)), file= conn, sep= ',', col.names= col.names, row.name= FALSE, quote= FALSE, append= isFALSE(col.names))
+        fwrite(x= fread(sprintf('gzip -d -c %s', csv)), file= conn, sep= ',', col.names= col.names, row.name= FALSE, quote= FALSE, append= !isTRUE(col.names))
         options(datatable.fread.input.cmd.message= TRUE)
         col.names<- FALSE
     }
