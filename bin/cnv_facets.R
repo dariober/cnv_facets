@@ -52,14 +52,14 @@ parser<- ArgumentParser(description= docstring, formatter_class= 'argparse.RawTe
 
 parser$add_argument('--out', '-o', help= 'Output prefix for the output files', required= TRUE)
 
-parser$add_argument('--tumour', '-t', help= 'BAM file for tumour sample. Ignored if using --pileup', required= FALSE)
-parser$add_argument('--normal', '-n', help= 'BAM file for normal sample. Ignored if using --pileup', required= FALSE)
+parser$add_argument('--snp-tumour', '-t', help= 'BAM file for tumour sample. Ignored if using --pileup', required= FALSE)
+parser$add_argument('--snp-normal', '-n', help= 'BAM file for normal sample. Ignored if using --pileup', required= FALSE)
 
 parser$add_argument('--snp-vcf', '-vcf', help= 'VCF file of SNPs where pileup is to be computed. Ignored if using --pileup required otherwise', required= FALSE)
 
 def<- 100
-parser$add_argument('--snp-pseudo', '-P', help= sprintf('If there is no SNP every MULTIPLE positions, insert a \\n\\
-blank record with the total count at that position. Ignored if using --pileup. Default %s', def), 
+parser$add_argument('--snp-pseudo', '-P', help= sprintf('If there is no SNP every MULTIPLE positions, insert a blank \\n\\
+record with the total count at that position. Ignored if using --pileup. Default %s', def), 
                     required= FALSE, default= def, type= 'integer')
 
 def<- 0
@@ -74,9 +74,9 @@ parser$add_argument('--snp-min-read-norm', '-rn', help= sprintf('Minimum read co
 def<- 0
 parser$add_argument('--snp-min-read-tum', '-rt', help= sprintf('Minimum read count in tumour bam for a position to be output. Ignored if using --pileup. Default %s', def), required= FALSE, default= def, type= 'integer')
 
-#def<- 1
-#parser$add_argument('--snp-nprocs', '-N', help= sprintf('Number of parallel processes to run to prepare the read pileup file.\\n\\
-#Each chromsome is assigned to a process. Ignored if using --pileup. Default %s', def), required= FALSE, default= def, type= 'integer')
+def<- 1
+parser$add_argument('--snp-nprocs', '-N', help= sprintf('Number of parallel processes to run to prepare the read pileup file.\\n\\
+Each chromsome is assigned to a process. Ignored if using --pileup. Default %s', def), required= FALSE, default= def, type= 'integer')
 
 parser$add_argument('--pileup', '-p', help= 'Pileup for matched normal (first sample) and tumour (second sample). \\n\\
 This is the output of the snp-pileup program accompanying facets.', required= FALSE)
@@ -218,63 +218,83 @@ suppressMessages(library(facets))
 suppressMessages(library(data.table))
 suppressMessages(library(Rsamtools))
 
-exec_snp_pileup<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth){
+exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth){
+    # Execute snp-pileup on chromosome `chrom` 
     
-    cmd<- c('snp-pileup',
-            '--count-orphans',
+    # Send tmp output to the same directory of the final output so we are sure
+    # we can write there.
+    d<- dirname(output)
+    chrom_vcf<- file.path(d, paste0(sub('\\.vcf\\.gz$|\\.vcf\\.bgz$', '', basename(snp_vcf)), '.', chrom, '.vcf'))
+    chrom_nbam<- file.path(d, paste0(sub('\\.bam', '', basename(normal_bam)), '.', chrom, '.bam'))
+    chrom_tbam<- file.path(d, paste0(sub('\\.bam', '', basename(tumour_bam)), '.', chrom, '.bam'))
+
+    cmd<- c('set -e', '\n',
+            'mkfifo', chrom_vcf, '\n',
+            'mkfifo', chrom_nbam, '\n',
+            'mkfifo', chrom_tbam, '\n',
+            'bcftools view --output-type u', snp_vcf, chrom, '>', chrom_vcf, '&\n',
+            'samtools view -u', normal_bam, chrom, '>', chrom_nbam, '&\n',
+            'samtools view -u', tumour_bam, chrom, '>', chrom_tbam, '&\n',
+            'snp-pileup',
+            # '--count-orphans',
             '--gzip',
             '--max-depth', max_depth,
             '--pseudo-snps', pseudo_snp,
             '--min-map-quality', mapq,
             '--min-base-quality', baq,
             '--min-read-counts', paste(c(min_read_norm, min_read_tum), collapse= ','),
-            snp_vcf, output, normal_bam, tumour_bam
+            chrom_vcf, output, chrom_nbam, chrom_tbam
        )
-    unlink(output)
-    status<- system2(cmd)
+    cmd<- paste(cmd, collapse= ' ')
+    status<- system(cmd)
     if(status != 0){
-        stop(sprintf('\nError in computing snp pileup. Exit code %s for %s\n\n' , status, snp_vcf))
+        stop(sprintf('\nError in computing snp pileup. Exit code %s for command \n%s\n\n' , status, cmd))
     }
+    unlink(c(chrom_vcf, chrom_nbam, chrom_tbam))
+    return(cmd)
 }
 
-# exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth, nprocs){
-#     
-#     # We always process each chromsome independently to avoid https://github.com/mskcc/facets/issues/101
-#     # 
-#     #if(nprocs == 1){
-#     #    exec_snp_pileup(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth)
-#     #    return()
-#     #}
-# 
-#     tmpdir<- tempfile(pattern = 'cnv_facets_', tmpdir = dirname(output))
-#     dir.create(tmpdir)
-#     
-#     chrom_vcf<- split_vcf(snp_vcf, tmpdir)
-# 
-#     cl<- makeCluster(nprocs, type= 'FORK')
-#     chrom_output<- parLapply(cl, chrom_vcf, function(x){
-#         chrom_output<- paste0(sub('\\.vcf$', '', x), '.csv.gz')
-#         exec_snp_pileup(x, chrom_output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth)
-#         unlink(x)
-#         return(chrom_output)
-#     })
-#     stopCluster(cl)
-#     concat_csv(chrom_output, output)
-#     unlink(tmpdir, recursive= TRUE)
-# }
-# 
+exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth, nprocs){
+    
+    dtm<- format(Sys.time(), "%y%m%d-%H%M%S")
+    tmpdir<- tempfile(pattern = paste0('cnv_', dtm, '_'), tmpdir = dirname(output))
+    dir.create(tmpdir)
+    
+    chroms<- headerTabix(snp_vcf)$seqnames
+
+    cl<- makeCluster(nprocs, type= 'FORK')
+    chrom_csv<- parLapply(cl, chroms, function(chrom){
+        chrom_csv<- file.path(tmpdir, paste0(chrom, '.csv.gz'))
+        cmd<- exec_snp_pileup(chrom= chrom, 
+                              snp_vcf= snp_vcf,
+                              output= chrom_csv, 
+                              normal_bam= normal_bam, 
+                              tumour_bam= tumour_bam, 
+                              mapq= mapq, 
+                              baq= baq, 
+                              pseudo_snp= pseudo_snp, 
+                              min_read_norm= min_read_norm, 
+                              min_read_tum= min_read_tum, 
+                              max_depth= max_depth)
+        return(chrom_csv)
+    })
+    stopCluster(cl)
+    concat_csv(chrom_csv, output, tmpdir= tmpdir)
+    unlink(tmpdir, recursive= TRUE)
+}
+
 # split_vcf<- function(vcf, outdir){
 #     write(sprintf('Splitting vcf file %s into %s', vcf, outdir), stderr())
 #     xf<- file(vcf, open= 'r')
 #     if(summary(xf)$class == 'gzfile'){
-#         conn<- sprintf('gunzip -c %s', vcf)
+#         conn<- sprintf('gzip -d -c %s', vcf)
 #     } else {
 #         conn<- vcf
 #     }
 #     close(xf)
 #     
 #     options(datatable.fread.input.cmd.message= FALSE)
-#     snp<- fread(conn, select= c('#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER'))
+#     snp<- fread(conn, select= c('#CHROM', 'POS', 'ID', 'REF', 'ALT'))
 #     options(datatable.fread.input.cmd.message= TRUE)
 # 
 #     chroms<- unique(snp[['#CHROM']])
@@ -282,40 +302,50 @@ exec_snp_pileup<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, p
 #     for(chrom in chroms){
 #         out<- file.path(outdir, paste0(chrom, '.vcf'))
 #         chrom_output<- c(chrom_output, out)
+#         snp_out<- snp[snp[['#CHROM']] == chrom]
+#         snp_out[, QUAL := '.']
+#         snp_out[, FILTER := '.']
 #         write('##fileformat=VCFv4.0', out) # Minimal meta-data!
 #         options(warn= -1) # Ignore the warning about appending column names
-#         write.table(snp[snp[['#CHROM']] == chrom], file= out, append= TRUE, sep= '\t', quote= FALSE, row.names= FALSE)
+#         if(grepl('data.table', find('fwrite', mode= 'function'))){
+#             fwrite(snp_out, file= out, append= TRUE, sep= '\t', quote= FALSE, row.names= FALSE, col.names= TRUE)
+#         } else {
+#             write.table(snp_out, file= out, append= TRUE, sep= '\t', quote= FALSE, row.names= FALSE, col.names= TRUE)
+#         }
 #         options(warn= 0)
+#         rm(snp_out)
 #     }
 #     rm(snp)
-#     x_ <- gc(verbose= FALSE)
+#     for(i in 1:10){
+#         x_ <- gc(verbose= FALSE)
+#     }
 #     return(chrom_output)
 # }
-# 
-# concat_csv<- function(csv_list, xfile){
-#     isGzip<- ifelse(grepl('\\.gz$', xfile), TRUE, FALSE)
-#     if(isGzip == TRUE){
-#         conn<- tempfile(pattern= 'cnv_facets_', tmpdir= dirname(xfile), fileext= '.csv')
-#     } else {
-#         conn<- xfile
-#     }
-#     col.names<- TRUE
-#     for(csv in csv_list){
-#         options(datatable.fread.input.cmd.message= FALSE)
-#         fwrite(x= fread(sprintf('gunzip -c %s', csv)), file= conn, sep= ',', col.names= col.names, row.name= FALSE, quote= FALSE, append= isFALSE(col.names))
-#         options(datatable.fread.input.cmd.message= TRUE)
-#         col.names<- FALSE
-#     }
-#     if(isGzip == TRUE){
-#         system2(c('gzip', '-c', conn), stdout= xfile)
-#         unlink(conn)
-#     }
-# }
+
+concat_csv<- function(csv_list, xfile, tmpdir){
+    isGzip<- ifelse(grepl('\\.gz$', xfile), TRUE, FALSE)
+    if(isGzip == TRUE){
+        conn<- file.path(tmpdir, sub('\\.gz', '', basename(xfile))) # tempfile(pattern= 'cnv_facets_', tmpdir= dirname(xfile), fileext= '.csv')
+    } else {
+        conn<- xfile
+    }
+    col.names<- TRUE
+    for(csv in csv_list){
+        options(datatable.fread.input.cmd.message= FALSE)
+        fwrite(x= fread(sprintf('gzip -d -c %s', csv)), file= conn, sep= ',', col.names= col.names, row.name= FALSE, quote= FALSE, append= isFALSE(col.names))
+        options(datatable.fread.input.cmd.message= TRUE)
+        col.names<- FALSE
+    }
+    if(isGzip == TRUE){
+        system2(c('gzip', '-c', conn), stdout= xfile)
+        unlink(conn)
+    }
+}
 
 readSnpMatrix2<- function(pileup, gbuild){
     xf<- file(pileup, open= 'r')
     if(summary(xf)$class == 'gzfile'){
-        conn<- sprintf('gunzip -c %s', pileup)
+        conn<- sprintf('gzip -d -c %s', pileup)
     } else {
         conn<- pileup
     }
@@ -428,10 +458,15 @@ annotate<- function(cnv, bed_file){
 
 # ---------------- [Validate arguments] -------------
 
-if(is.null(xargs$pileup) && (is.null(xargs$tumour) || is.null(xargs$normal))){
+if(is.null(xargs$pileup) && (is.null(xargs$snp_tumour) || is.null(xargs$snp_normal))){
     write('Please provide a pileup file or both a tumour and a normal bam file', stderr()) 
     quit(status= 1)
 }
+if(! is.null(xargs$snp_tumour) && xargs$snp_tumour == xargs$snp_normal){
+    write('Input bam files for tumour and normal cannot be the same', stderr())
+    quit(status= 1)
+}
+
 if(is.null(xargs$pileup) && is.null(xargs$snp_vcf)){
     write('Please use the --snp_vcf option to provide a VCF file of SNPs', stderr()) 
     quit(status= 1)
@@ -452,7 +487,7 @@ if(xargs$rnd_seed == def_rnd){
     if( ! is.null(xargs$pileup) ){
         seed<- sum(utf8ToInt(xargs$pileup))
     } else {
-        seed<- sum(utf8ToInt(paste(xargs$normal, xargs$tumour)))
+        seed<- sum(utf8ToInt(paste(xargs$snp_normal, xargs$snp_tumour)))
     }
 } else if( ! is.na(suppressWarnings(as.numeric(xargs$rnd_seed)))){
     seed<- as.numeric(xargs$rnd_seed)
@@ -463,16 +498,18 @@ set.seed(seed)
 
 if(is.null(xargs$pileup)){
     pileup<- paste0(xargs$out, '.csv.gz')
-    exec_snp_pileup(snp_vcf= xargs$snp_vcf, 
+    basename(xargs$snp_tumour)
+    exec_snp_pileup_parallel(snp_vcf= xargs$snp_vcf, 
                              output= pileup, 
-                             normal_bam= xargs$normal, 
-                             tumour_bam= xargs$tumour, 
+                             normal_bam= xargs$snp_normal, 
+                             tumour_bam= xargs$snp_tumour, 
                              mapq= xargs$snp_mapq, 
                              baq= xargs$snp_baq, 
                              pseudo_snp= xargs$snp_pseudo,
                              min_read_norm= xargs$snp_min_read_norm,
                              min_read_tum= xargs$snp_min_read_tum,
-                             max_depth= xargs$depth[2]
+                             max_depth= xargs$depth[2],
+                             nprocs= xargs$snp_nprocs
                              )
 } else {
     pileup<- xargs$pileup
