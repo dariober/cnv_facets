@@ -137,6 +137,40 @@ mkdir -p tmp
 cd ${cwd}
 Rscript install/install_pkgs.R
 
+# Samtools
+found=`command -v samtools` || true
+if [[ -z $found ]]
+then
+    cd ${cwd}/tmp
+    rm -f samtools-1.8.tar.bz2
+    wget https://github.com/samtools/samtools/releases/download/1.8/samtools-1.8.tar.bz2
+    tar xf samtools-1.8.tar.bz2
+    rm samtools-1.8.tar.bz2
+    cd samtools-1.8
+    ./configure --prefix=`pwd`
+    make -j 4
+    cp samtools ${bin_dir}/
+fi
+command -v samtools
+samtools --version
+
+# bcftools
+found=`command -v bcftools` || true
+if [[ -z $found ]]
+then
+    cd ${cwd}/tmp
+    rm -f bcftools-1.8.tar.bz2
+    wget https://github.com/samtools/bcftools/releases/download/1.8/bcftools-1.8.tar.bz2
+    tar xf bcftools-1.8.tar.bz2
+    rm bcftools-1.8.tar.bz2
+    cd bcftools-1.8
+    ./configure --prefix=`pwd`
+    make -j 4
+    cp bcftools ${bin_dir}/
+fi
+command -v bcftools
+bcftools --version
+
 # FACETS::snp-pileup
 found=`command -v snp-pileup` || true
 if [[ -z $found ]]
@@ -168,6 +202,6 @@ if [[ $skip_test != 1 ]]
 then
     echo -e "\n\033[1mExecuting test suite...\033[0m\n"
     cd ${cwd}/test
-    python test.py
+    python test_cnv_facets.py
 fi
 

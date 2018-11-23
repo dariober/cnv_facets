@@ -22,40 +22,52 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+repos<- 'https://cran.r-project.org'
+
+lib<- NULL
+for(x in .libPaths()){
+    if(file.access(x, mode= 2) == 0){
+        lib<- x
+        break
+    }
+}
+
+if(is.null(lib)){
+    stop(sprintf('Cannot find a writable directory to install R packages.'))
+}
+
+tryCatch({
+        suppressMessages(library(devtools))
+    }, error = function(err) {
+        install.packages('devtools', repos= repos, lib= lib)
+    }
+)
 
 tryCatch({
         suppressMessages(library(Rsamtools))
     }, error = function(err) {
         source("https://bioconductor.org/biocLite.R")
-        biocLite("Rsamtools")
+        biocLite("Rsamtools", ask= FALSE, suppressUpdates= TRUE, lib= lib)
     }
 )
 
 tryCatch({
         suppressMessages(library(data.table))
     }, error = function(err) {
-        install.packages('data.table', repos='https://cran.r-project.org')
+        install.packages('data.table', repos= repos, lib)
     }
 )
 
 tryCatch({
         suppressMessages(library(argparse))
     }, error = function(err) {
-        install.packages('argparse', repos='https://cran.r-project.org')
-    }
-)
-
-tryCatch({
-        # devtools only necessary to install other packages.
-        suppressMessages(library(devtools))
-    }, error = function(err) {
-        install.packages('devtools', repos='https://cran.r-project.org')
+        devtools::install_github("trevorld/argparse", ref= "v1.1.1", repos= repos, lib= lib)
     }
 )
 
 tryCatch({
         suppressMessages(library(facets))
     }, error = function(err) {
-        devtools::install_github("mskcc/facets")
+        devtools::install_github("mskcc/facets", ref = "434b5ce", lib= lib)
     }
 )
