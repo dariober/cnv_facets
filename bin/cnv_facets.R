@@ -246,7 +246,7 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
             chrom_vcf, output, chrom_nbam, chrom_tbam
        )
     cmd<- paste(cmd, collapse= ' ')
-    status<- system(cmd)
+    status<- system2("/bin/bash", args= c("-c", shQuote(cmd)))
     if(status != 0){
         stop(sprintf('\nError in computing snp pileup. Exit code %s for command \n%s\n\n' , status, cmd))
     }
