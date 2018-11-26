@@ -11,9 +11,9 @@ before_install:
 
 install:
     - bash setup.sh --help
-    - bash setup.sh
-    - bash setup.sh # Running again should do nothing
+    - bash setup.sh --skip_test 
+    - bash setup.sh --skip_test # Running again should do nothing
 
 script:
     - bash setup.sh -b foo/bar 2> err.log || true && grep --silent 'Error' err.log && rm err.log
-    - cd test && bash test.sh
+    - cd test && python test_cnv_facets.py
