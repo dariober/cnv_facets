@@ -5,7 +5,6 @@
 Somatic copy variant caller for next generation sequencing data based on the
 [FACETS](https://github.com/mskcc/facets) package
 
-
 <!-- vim-markdown-toc GFM -->
 
 * [Requirements and Installation](#requirements-and-installation)
@@ -13,8 +12,12 @@ Somatic copy variant caller for next generation sequencing data based on the
     * [Option 1: BAM & VCF input](#option-1-bam--vcf-input)
     * [Option 2: Pileup input](#option-2-pileup-input)
 * [Output](#output)
+    * [Variants](#variants)
+    * [CNV profile plot](#cnv-profile-plot)
+    * [Diagnostic plot](#diagnostic-plot)
+    * [Pileup file](#pileup-file)
+* [Usage guidelines](#usage-guidelines)
 * [Time & memory footprint](#time--memory-footprint)
-* [References](#references)
 
 <!-- vim-markdown-toc -->
 
@@ -51,7 +54,6 @@ write, *e.g.*, `~/bin`.
   directory unless already found on PATH
 
 * Run the test suite
-
 
 Input
 =====
@@ -120,22 +122,98 @@ cnv_facets.R -p <pileup.csv.gz> -o <output_prefix> [...]
 Output
 ======
 
+The option `--out/-o <prefix>` determines the name and location of the output
+files. For more information refer to the documentation of the FACETS package.
+
+Variants
+--------
+
+* `<prefix>.vcf.gz`
+
+VCF file compressed and indexed of copy number variants. The INFO tags below annotate each variant:
+
+Tag | Type | Description
+----|------|------------
+SVTYPE | String | Type of structural variant
+SVLEN | Integer | Difference in length between REF and ALT alleles
+END | Integer | End position of the variant described in this record
+NUM_MARK | Integer | Number of SNPs in the segment
+NHET | Integer | Number of SNPs that are deemed heterozygous
+CNLR_MEDIAN | Float | Median log-ratio (logR) of the segment. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal
+CNLR_MEDIAN_CLUST | Float | Median log-ratio (logR) of the segment cluster. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal
+MAF_R | Float | Log-odds-ratio (logOR) summary for the segment. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus in the normal
+MAF_R_CLUST | Float | Log-odds-ratio (logOR) summary for the segment cluster. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus that in the normal
+SEGCLUST | Integer | Segment cluster to which the segment belongs
+CF_EM | Float | Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid
+TCN_EM | Integer | Total copy number. 2 for normal diploid
+LCN_EM | Integer | Lesser (minor) copy number. 1 for normal diploid
+CNV_ANN | String | Annotation features assigned to this CNV
+
+The header of the VCF file also stores the estimates of tumour purity and ploidy.
+
+CNV profile plot
+----------------
+
+* `<prefix>.cnv.png`
+
+Summary plot of CNVs across the genome, for [example](./docs/tex.cnv.png):
+
+<img src="./docs/tex.cnv.png" height="600"/>
+
+Diagnostic plot
+---------------
+
+* `<prefix>.spider.pdf`
+
+This is a diagnostic plot to check how well the copy number fits
+work The estimated segment summaries are plotted as circles
+where the size of the circle increases with the number of loci in
+the segment. The expected value for various integer copy number
+states are drawn as curves for purity ranging from 0 to 0.95. For
+a good fit, the segment summaries should be close to one of the
+lines. (*Description from `facets::logRlogORspider`*). For [example](./docs/tex.spider.png):
+
+<img src="./docs/tex.spider.png" height="400"/>
+
+Pileup file
+-----------
+
+* `<prefix>.csv.gz`
+
+File of nucleotide counts at each SNP in normal and tumour sample.
+
+Usage guidelines
+================
+
+* Option `--cval`
+
+Critical values for segmentation in pre-processing and processing.
+Larger values reduce segmentation. [25 150] is facets default based on exome data. For whole genome
+consider increasing to [25 400] and for targeted sequencing consider reducing them. Default 25 150
+
+* Option `--nbhd-snp`
+
+If an interval of size nbhd-snp contains more than one SNP, sample a random one.
+This sampling reduces the SNP serial correlation. This value should be similar
+to the median insert size of the libraries. 250 is facets default based on
+exome data. For whole genome consider increasing to 500 and for target
+sequencing decrease to 150. Default 250
+
 Time & memory footprint
 =======================
 
-The analysis of a whole genome sequence of a human tumour-normal pair where the
+The analysis of a whole genome sequence where the
 tumour is sequenced at ~80x (~2 billion reads, BAM file ~200 GB) and the normal
 at ~40x (~1 billion reads, BAM files ~100 GB) with ~37 million SNPs (from dbSNP
 `common_all_20180418.vcf.gz`) and with no filtering on read depth and read
 quality requires:
 
-* 5 hours to prepare the SNP pileup (small memory footprint since BAM and VCF
-  files are processed serially). Time is mostly driven by the size of the BAM files
+* 5 hours to prepare the SNP pileup with small memory footprint. Time is mostly
+  driven by the size of the BAM files. To speed-up the pileup consider the 
+  option `--ncores` to parallelize across chromosomes.
 
 * 1 hour and ~15 GB of memory for the actual detection of CNVs starting from
   the pileup. Time and memory is mostly driven by the number of SNPs
 
 This is A typical targeted sequencing datasets wi
 
-References
-==========
