@@ -198,6 +198,8 @@ set +x
 rm -rf tmp
 echo -e "\n\033[32mSetup successfully completed\033[0m"
 
+# TEST SUITE
+
 if [[ $skip_test != 1 ]]
 then
     echo -e "\n\033[1mExecuting test suite...\033[0m\n"
