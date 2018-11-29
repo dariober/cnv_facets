@@ -74,24 +74,24 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
 
     def testParallel(self):
-        p = sp.Popen("../bin/cnv_facets.R -N 3 -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        p = sp.Popen("../bin/cnv_facets.R -N 3 -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
         self.assertEqual(0, p.returncode)
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
         f= gzip.open('test_out/out.csv.gz', 'rb').read().decode().strip().split('\n')
 
         self.assertTrue(f[0].startswith('Chromosome'))
-        self.assertTrue(all([x.startswith('chr') for x in f[1:]]))
+        self.assertTrue(all([not x.startswith('chr') for x in f[1:]]))
 
         chroms= OrderedDict({})
         for line in f[1:]:
             line= line.split(',')
             chroms[line[0]]= chroms.get(line[0], 0) + 1
-        self.assertEquals(['chr1', 'chr7', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr8'], list(chroms.keys()))
+        self.assertEquals(['20', '21', '22'], list(chroms.keys()))
         self.assertTrue([chroms[x] > 10 for x in chroms.keys()])
 
     def testBamInput(self):
-        p = sp.Popen("../bin/cnv_facets.R -t data/tumour.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        p = sp.Popen("../bin/cnv_facets.R -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
         self.assertEqual(0, p.returncode)
         self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
@@ -100,7 +100,7 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
 
     def testFailOnSnpPileup(self):
-        p = sp.Popen("../bin/cnv_facets.R -t data/INVALID.bam -n data/normal.bam -vcf data/snps.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        p = sp.Popen("../bin/cnv_facets.R -t data/INVALID.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
         self.assertTrue(p.returncode != 0)
         # Check we exited immediatly after failing the first snp-pileup

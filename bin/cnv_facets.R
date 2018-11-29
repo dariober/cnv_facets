@@ -23,6 +23,9 @@
 # DEALINGS IN THE SOFTWARE.
 
 suppressMessages(library(argparse))
+suppressMessages(library(facets))
+suppressMessages(library(data.table))
+suppressMessages(library(Rsamtools))
 
 # -----------------------------------------------------------------------------
 
@@ -50,7 +53,7 @@ EXAMPLE\\n\\
 See the online documentation for more details and usage.\\n\\
 Version %s', VERSION)
 
-epilog<- 'Options --snp-* are used only to generate the pileup file. They are ignored with option --pileup.'
+epilog<- 'Options --snp-* are used only to generate the pileup file. They are ignored with option --pileup'
 
 parser<- ArgumentParser(description= docstring, formatter_class= 'argparse.RawTextHelpFormatter', epilog= epilog)
 
@@ -61,29 +64,19 @@ parser$add_argument('--snp-normal', '-n', help= 'BAM file for normal sample', re
 
 parser$add_argument('--snp-vcf', '-vcf', help= 'VCF file of SNPs where pileup is to be computed', required= FALSE)
 
-def<- 100
-parser$add_argument('--snp-pseudo', '-P', help= sprintf('If there is no SNP every MULTIPLE positions, insert a blank \\n\\
-record with the total count at that position. Default %s', def), 
-                    required= FALSE, default= def, type= 'integer')
-
-def<- 0
+def<- 5
 parser$add_argument('--snp-mapq', '-mq', help= sprintf('Sets the minimum threshold for mapping quality. Default %s', def), required= FALSE, default= def, type= 'integer')
 
-def<- 0
+def<- 10
 parser$add_argument('--snp-baq', '-bq', help= sprintf('Sets the minimum threshold for base quality. Default %s', def), required= FALSE, default= def, type= 'integer')
-
-def<- 0
-parser$add_argument('--snp-min-read-norm', '-rn', help= sprintf('Minimum read count in normal bam for a position to be output. Default %s', def), required= FALSE, default= def, type= 'integer')
-
-def<- 0
-parser$add_argument('--snp-min-read-tum', '-rt', help= sprintf('Minimum read count in tumour bam for a position to be output. Default %s', def), required= FALSE, default= def, type= 'integer')
 
 def<- 1
 parser$add_argument('--snp-nprocs', '-N', help= sprintf('Number of parallel processes to run to prepare the read pileup file.\\n\\
 Each chromsome is assigned to a process. Default %s', def), required= FALSE, default= def, type= 'integer')
 
 parser$add_argument('--pileup', '-p', help= 'Pileup for matched normal (first sample) and tumour (second sample). \\n\\
-This is the output of the snp-pileup program accompanying facets.', required= FALSE)
+Not needed if using BAM input. This file is the <prefix>.cvs.gz output of\\n\\
+of a previous run of cnv_facet.R', required= FALSE)
 
 def<- c(25, 4000)
 parser$add_argument('--depth', '-d', help= sprintf('Minimum and maximum depth in normal sample for a position to be considered. Default %s', paste(def, collapse= ' ')), type= 'integer', default= def, nargs= 2)
@@ -93,12 +86,12 @@ parser$add_argument('--cval', '-cv', help= sprintf("Critical values for segmenta
 Larger values reduce segmentation. [25 150] is facets default based on exome data. For whole genome\\n\\
 consider increasing to [25 400] and for targeted sequencing consider reducing them. Default %s", paste(def, collapse= ' ')), type= 'double', default= def, nargs= 2)
 
-def<- 250 
+def_nbhd<- c('auto', 250)
 parser$add_argument('--nbhd-snp', '-snp', help= sprintf('If an interval of size nbhd-snp contains more than one SNP, sample a random one.\\n\\
 This sampling reduces the SNP serial correlation. This value should be similar\\n\\
-to the median insert size of the libraries. 250 is facets default based on\\n\\
-exome data. For whole genome consider increasing to 500 and for target\\n\\
-sequencing decrease to 150. Default %s', def), type= 'integer', default= def)
+to the median insert size of the libraries. If "auto" and if using paired\\n\\
+end BAM input, use the estimated insert size from the normal bam file. Otherwise use\\n\\
+250. Default %s', def_nbhd[1]), type= 'character', default= def_nbhd[1])
 
 parser$add_argument('--annotation', '-a', help= sprintf('Optional annotation file in BED format where the 4th column contains the\\n\\
 feature name (e.g. gene name). CNVs will be annotated with an additional \\n\\
@@ -115,118 +108,140 @@ parser$add_argument('--rnd-seed', '-s', help= sprintf('Seed for random number ge
 # NB: argparse v1.1.1+ required for -v option to work.
 parser$add_argument("-v", "--version", action= 'version', version= VERSION)
 
-xargs<- parser$parse_args()
-
 # -----------------------------------------------------------------------------
-HG19<- c(chr1= 249250621, 
-         chr2= 243199373, 
-         chr3= 198022430, 
-         chr4= 191154276, 
-         chr5= 180915260, 
-         chr6= 171115067, 
-         chr7= 159138663, 
-         chr8= 146364022, 
-         chr9= 141213431, 
-         chr10= 135534747, 
-         chr11= 135006516, 
-         chr12= 133851895, 
-         chr13= 115169878, 
-         chr14= 107349540, 
-         chr15= 102531392, 
-         chr16= 90354753, 
-         chr17= 81195210, 
-         chr18= 78077248, 
-         chr19= 59128983, 
-         chr20= 63025520,  
-         chr21= 48129895, 
-         chr22= 51304566, 
-         chrM= 16571, 
-         chrX= 155270560, 
-         chrY= 59373566)
+genomes<- list(
+    HG19= c(chr1= 249250621, 
+            chr2= 243199373, 
+            chr3= 198022430, 
+            chr4= 191154276, 
+            chr5= 180915260, 
+            chr6= 171115067, 
+            chr7= 159138663, 
+            chr8= 146364022, 
+            chr9= 141213431, 
+            chr10= 135534747, 
+            chr11= 135006516, 
+            chr12= 133851895, 
+            chr13= 115169878, 
+            chr14= 107349540, 
+            chr15= 102531392, 
+            chr16= 90354753, 
+            chr17= 81195210, 
+            chr18= 78077248, 
+            chr19= 59128983, 
+            chr20= 63025520,  
+            chr21= 48129895, 
+            chr22= 51304566, 
+            chrM= 16571, 
+            chrX= 155270560, 
+            chrY= 59373566),
 
-HG38<- c(chr1= 248956422,
-         chr2= 242193529,
-         chr3= 198295559,
-         chr4= 190214555,
-         chr5= 181538259,
-         chr6= 170805979,
-         chr7= 159345973,
-         chr8= 145138636,
-         chr9= 138394717,
-         chr11= 135086622,
-         chr10= 133797422,
-         chr12= 133275309,
-         chr13= 114364328,
-         chr14= 107043718,
-         chr15= 101991189,
-         chr16= 90338345,
-         chr17= 83257441,
-         chr18= 80373285,
-         chr19= 58617616,
-         chr20= 64444167,
-         chr21= 46709983,
-         chr22= 50818468,
-         chrM=  16569,
-         chrX= 156040895,
-         chrY= 57227415)
+    HG38= c(chr1= 248956422,
+            chr2= 242193529,
+            chr3= 198295559,
+            chr4= 190214555,
+            chr5= 181538259,
+            chr6= 170805979,
+            chr7= 159345973,
+            chr8= 145138636,
+            chr9= 138394717,
+            chr11= 135086622,
+            chr10= 133797422,
+            chr12= 133275309,
+            chr13= 114364328,
+            chr14= 107043718,
+            chr15= 101991189,
+            chr16= 90338345,
+            chr17= 83257441,
+            chr18= 80373285,
+            chr19= 58617616,
+            chr20= 64444167,
+            chr21= 46709983,
+            chr22= 50818468,
+            chrM=  16569,
+            chrX= 156040895,
+            chrY= 57227415),
 
-MM9<- c(chr1= 197195432,
-        chr2= 181748087,
-        chr3= 159599783,
-        chr4= 155630120,
-        chr5= 152537259,
-        chr6= 149517037,
-        chr7= 152524553,
-        chr8= 131738871,
-        chr9= 124076172,
-        chr10= 129993255,
-        chr11= 121843856,
-        chr12= 121257530,
-        chr13= 120284312,
-        chr14= 125194864,
-        chr15= 103494974,
-        chr16= 98319150,
-        chr17= 95272651,
-        chr18= 90772031,
-        chr19= 61342430,
-        chrM= 16299,
-        chrX= 166650296,
-        chrY= 15902555)
+    MM9= c(chr1= 197195432,
+           chr2= 181748087,
+           chr3= 159599783,
+           chr4= 155630120,
+           chr5= 152537259,
+           chr6= 149517037,
+           chr7= 152524553,
+           chr8= 131738871,
+           chr9= 124076172,
+           chr10= 129993255,
+           chr11= 121843856,
+           chr12= 121257530,
+           chr13= 120284312,
+           chr14= 125194864,
+           chr15= 103494974,
+           chr16= 98319150,
+           chr17= 95272651,
+           chr18= 90772031,
+           chr19= 61342430,
+           chrM= 16299,
+           chrX= 166650296,
+           chrY= 15902555),
 
-MM10<- c(chr1= 195471971,
-         chr2= 182113224,
-         chr3= 160039680,
-         chr4= 156508116,
-         chr5= 151834684,
-         chr6= 149736546,
-         chr7= 145441459,
-         chr8= 129401213,
-         chr9= 124595110,
-         chr10= 130694993,
-         chr11= 122082543,
-         chr12= 120129022,
-         chr13= 120421639,
-         chr14= 124902244,
-         chr15= 104043685,
-         chr16= 98207768,
-         chr17= 94987271,
-         chr18= 90702639,
-         chr19= 61431566,
-         chrM= 16299,
-         chrX= 171031299,
-         chrY= 91744698)
+    MM10= c(chr1= 195471971,
+            chr2= 182113224,
+            chr3= 160039680,
+            chr4= 156508116,
+            chr5= 151834684,
+            chr6= 149736546,
+            chr7= 145441459,
+            chr8= 129401213,
+            chr9= 124595110,
+            chr10= 130694993,
+            chr11= 122082543,
+            chr12= 120129022,
+            chr13= 120421639,
+            chr14= 124902244,
+            chr15= 104043685,
+            chr16= 98207768,
+            chr17= 94987271,
+            chr18= 90702639,
+            chr19= 61431566,
+            chrM= 16299,
+            chrX= 171031299,
+            chrY= 91744698)
+)
+# ----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
+avg_insert_size<- function(bam, default){
+    idx<- data.table(idxstatsBam(bam))[mapped > 0][order(-mapped)]
+    if(nrow(idx) > 10){
+        idx<- idx[1:10,]
+    }
+    ins_size<- c()
+    n_reads<- c()
+    hdr_len<- length(scanBamHeader(bam)[[1]][['text']])
+    for(chrom in idx$seqnames){
+        cmd<- sprintf('samtools view -q 3 -f 3 -F 3840 -h %s %s | head -n %s | samtools stats | grep ^SN | cut -f 2-',
+                      bam, chrom, 200000 + hdr_len)
+        stats<- system(cmd, intern= TRUE)
+        size<- grep('insert size average', stats, value= TRUE)
+        size<- as.numeric(unlist(strsplit(size, '\t'))[2])
+        n<- grep('reads properly paired', stats, value= TRUE)
+        n<- as.numeric(unlist(strsplit(n, '\t'))[2])
+        if(n == 0){
+            next 
+        } 
+        ins_size<- c(ins_size, size)
+        n_reads<- c(n_reads, n)
+    }
+    if(length(n_reads) == 0){
+        return(default)
+    }
+    return(weighted.mean(ins_size, n_reads))
+}
 
-suppressMessages(library(facets))
-suppressMessages(library(data.table))
-suppressMessages(library(Rsamtools))
-
-exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth){
+exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp){
     # Execute snp-pileup on chromosome `chrom` 
-    
     # Send tmp output to the same directory of the final output so we are sure
-    # we can write there.
+    # we can write there. 
     d<- dirname(output)
     chrom_vcf<- file.path(d, paste0(sub('\\.vcf\\.gz$|\\.vcf\\.bgz$', '', basename(snp_vcf)), '.', chrom, '.vcf'))
     chrom_nbam<- file.path(d, paste0(sub('\\.bam', '', basename(normal_bam)), '.', chrom, '.bam'))
@@ -250,13 +265,12 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
             'pid_tbam=$!', '\n',
             '\n',
             'snp-pileup',
-            # '--count-orphans',
             '--gzip',
-            '--max-depth', max_depth,
             '--pseudo-snps', pseudo_snp,
             '--min-map-quality', mapq,
             '--min-base-quality', baq,
-            '--min-read-counts', paste(c(min_read_norm, min_read_tum), collapse= ','),
+            '--max-depth', 10000000,
+            '--min-read-counts', '0,0',
             chrom_vcf, output, chrom_nbam, chrom_tbam,
             '\n',
             'set +e', '\n',
@@ -281,10 +295,10 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     return(cmd)
 }
 
-exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, min_read_norm, min_read_tum, max_depth, nprocs){
+exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs){
     
     dtm<- format(Sys.time(), "%y%m%d-%H%M%S")
-    tmpdir<- tempfile(pattern = paste0('cnv_', dtm, '_'), tmpdir = dirname(output))
+    tmpdir<- tempfile(pattern = paste0(basename(sub('\\.cvs\\.gz$', '', output)), '_', dtm, '_'), tmpdir = dirname(output))
     dir.create(tmpdir)
     
     chroms<- headerTabix(snp_vcf)$seqnames
@@ -299,10 +313,7 @@ exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, map
                               tumour_bam= tumour_bam, 
                               mapq= mapq, 
                               baq= baq, 
-                              pseudo_snp= pseudo_snp, 
-                              min_read_norm= min_read_norm, 
-                              min_read_tum= min_read_tum, 
-                              max_depth= max_depth)
+                              pseudo_snp= pseudo_snp)
         return(chrom_csv)
     })
     stopCluster(cl)
@@ -313,7 +324,7 @@ exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, map
 concat_csv<- function(csv_list, xfile, tmpdir){
     isGzip<- ifelse(grepl('\\.gz$', xfile), TRUE, FALSE)
     if(isGzip == TRUE){
-        conn<- file.path(tmpdir, sub('\\.gz', '', basename(xfile))) # tempfile(pattern= 'cnv_facets_', tmpdir= dirname(xfile), fileext= '.csv')
+        conn<- file.path(tmpdir, sub('\\.gz', '', basename(xfile))) 
     } else {
         conn<- xfile
     }
@@ -444,184 +455,228 @@ annotate<- function(cnv, bed_file){
     return(gcnv)
 }
 
-# ---------------- [Validate arguments] -------------
+make_header<- function(gbuild, genomes, is_chrom_prefixed, cmd, extra){
+    # extra: Named vector of additional information. E.g. c(purity=0.5, ploidy= 2.1) 
+    header<- c(
+        '##fileformat=VCFv4.2',
+        sprintf('##reference=%s', gbuild),
+        '##FILTER=<ID=PASS,Description="All filters passed">'
+    )
+    # Contigs
+    # --------------------------
+    chrom_size<- NULL
+    if(gbuild == 'hg19') {chrom_size<- genomes$HG19}
+    if(gbuild == 'hg38') {chrom_size<- genomes$HG38}
+    if(gbuild == 'mm9') {chrom_size<- genomes$MM9}
+    if(gbuild == 'mm10') {chrom_size<- genomes$MM10}
 
-if(is.null(xargs$pileup) && (is.null(xargs$snp_tumour) || is.null(xargs$snp_normal))){
-    write('Please provide a pileup file or both a tumour and a normal bam file', stderr()) 
-    quit(status= 1)
-}
-if(! is.null(xargs$snp_tumour) && xargs$snp_tumour == xargs$snp_normal){
-    write('Input bam files for tumour and normal cannot be the same', stderr())
-    quit(status= 1)
+    stopifnot( ! is.null(chrom_size) )
+
+    for(i in 1:length(chrom_size)){
+        size<- chrom_size[i]
+        name<- names(chrom_size)[i]
+        if(is_chrom_prefixed != TRUE){
+            name<- sub('^chr', '', name)
+        }
+        header<- c(header, sprintf('##contig=<ID=%s,length=%s>', name, size))
+    }
+    # --------------------------
+
+    header<- c(header, '##FILTER=<ID=PASS,Description="All filters passed">')
+    header<- c(header, '##FILTER=<ID=neutral,Description="Copy number neutral">')
+    header<- c(header, '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">')
+    header<- c(header, '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">')
+    header<- c(header, '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">')
+    header<- c(header, '##INFO=<ID=NUM_MARK,Number=1,Type=Integer,Description="Number of SNPs in the segment">')
+    header<- c(header, '##INFO=<ID=NHET,Number=1,Type=Integer,Description="Number of SNPs that are deemed heterozygous">')
+    header<- c(header, '##INFO=<ID=CNLR_MEDIAN,Number=1,Type=Float,Description="Median log-ratio (logR) of the segment. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal">')
+    header<- c(header, '##INFO=<ID=CNLR_MEDIAN_CLUST,Number=1,Type=Float,Description="Median log-ratio (logR) of the segment cluster. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal">')
+    header<- c(header, '##INFO=<ID=MAF_R,Number=1,Type=Float,Description="Log-odds-ratio (logOR) summary for the segment. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus in the normal">')
+    header<- c(header, '##INFO=<ID=MAF_R_CLUST,Number=1,Type=Float,Description="Log-odds-ratio (logOR) summary for the segment cluster. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus that in the normal">')
+    header<- c(header, '##INFO=<ID=SEGCLUST,Number=1,Type=Integer,Description="Segment cluster to which the segment belongs">')
+    header<- c(header, '##INFO=<ID=CF_EM,Number=1,Type=Float,Description="Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid">')
+    header<- c(header, '##INFO=<ID=TCN_EM,Number=1,Type=Integer,Description="Total copy number. 2 for normal diploid">')
+    header<- c(header, '##INFO=<ID=LCN_EM,Number=1,Type=Integer,Description="Lesser (minor) copy number. 1 for normal diploid">')
+    header<- c(header, '##INFO=<ID=CNV_ANN,Number=.,Type=String,Description="Annotation features assigned to this CNV">')
+    header<- c(header, '##ALT=<ID=CNV,Description="Copy number variable region">')
+
+    header<- c(header, cmd)
+    # write(sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time()), vcf, append= TRUE)
+    
+    stopifnot(! is.null(names(extra)) )
+    for(i in 1:length(extra)){
+        key<- names(extra)[i]
+        value<- extra[i]
+        stopifnot( key != "" )
+        header<- c(header, sprintf('##%s=%s', key, value))
+    }
+    header<- c(header, '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO')
+    return(paste(header, collapse= '\n'))
 }
 
-if(is.null(xargs$pileup) && is.null(xargs$snp_vcf)){
-    write('Please use the --snp_vcf option to provide a VCF file of SNPs', stderr()) 
-    quit(status= 1)
-}
-if(xargs$depth[1] > xargs$depth[2]){
-    write('Error in argument --depth: min > max', stderr()) 
-    quit(status= 1)
-}
-if(xargs$cval[1] > xargs$cval[2]){
-    write('Error in argument --cval. Value for pre-processing (first argument)\nmust be lower than the value for processing (second argument)', stderr()) 
-    quit(status= 1)
-}
-# --------------- [Start processing] ----------------
+if(sys.nframe() == 0){
+    # Script is being executed from the command line
 
-dir.create(dirname(xargs$out), recursive= TRUE, showWarnings= FALSE)
+    # ---------------- [Validate arguments] -------------
 
-if(xargs$rnd_seed == def_rnd){
-    if( ! is.null(xargs$pileup) ){
-        seed<- sum(utf8ToInt(xargs$pileup))
+    xargs<- parser$parse_args()
+
+    if(is.null(xargs$pileup) && (is.null(xargs$snp_tumour) || is.null(xargs$snp_normal))){
+        write('Please provide a pileup file or both a tumour and a normal bam file', stderr()) 
+        quit(status= 1)
+    }
+    if(! is.null(xargs$snp_tumour) && xargs$snp_tumour == xargs$snp_normal){
+        write('Input bam files for tumour and normal cannot be the same', stderr())
+        quit(status= 1)
+    }
+
+    if(is.null(xargs$pileup) && is.null(xargs$snp_vcf)){
+        write('Please use the --snp_vcf option to provide a VCF file of SNPs', stderr()) 
+        quit(status= 1)
+    }
+    if(xargs$depth[1] > xargs$depth[2]){
+        write('Error in argument --depth: min > max', stderr()) 
+        quit(status= 1)
+    }
+    if(xargs$cval[1] > xargs$cval[2]){
+        write('Error in argument --cval. Value for pre-processing (first argument)\nmust be lower than the value for processing (second argument)', stderr()) 
+        quit(status= 1)
+    }
+
+    if(xargs$nbhd_snp == "auto"){
+        if(!is.null(xargs$pileup)){
+            nbhd_snp<- def_nbhd[2]
+        } else {
+            nbhd_snp<- avg_insert_size(xargs$snp_normal, default= def_nbhd[2])
+        }
+    } else if(is.na(as.integer(xargs$nbhd_snp))){
+        write('Argument to --nbhd-snp must be "auto" or an integer', stderr())
+        quit(status= 1)
     } else {
-        seed<- sum(utf8ToInt(paste(xargs$snp_normal, xargs$snp_tumour)))
+        nbhd_snp<- as.integer(xargs$nbhd_snp)  
     }
-} else if( ! is.na(suppressWarnings(as.numeric(xargs$rnd_seed)))){
-    seed<- as.numeric(xargs$rnd_seed)
-} else {
-    seed<- sum(utf8ToInt(xargs$rnd_seed))
-}
-set.seed(seed)
+    nbhd_snp<- as.integer(nbhd_snp)
 
-if(is.null(xargs$pileup)){
-    pileup<- paste0(xargs$out, '.csv.gz')
-    basename(xargs$snp_tumour)
-    exec_snp_pileup_parallel(snp_vcf= xargs$snp_vcf, 
-                             output= pileup, 
-                             normal_bam= xargs$snp_normal, 
-                             tumour_bam= xargs$snp_tumour, 
-                             mapq= xargs$snp_mapq, 
-                             baq= xargs$snp_baq, 
-                             pseudo_snp= xargs$snp_pseudo,
-                             min_read_norm= xargs$snp_min_read_norm,
-                             min_read_tum= xargs$snp_min_read_tum,
-                             max_depth= xargs$depth[2],
-                             nprocs= ceiling(xargs$snp_nprocs / 2)
-                             )
-} else {
-    pileup<- xargs$pileup
-}
+    # --------------- [Start processing] ----------------
 
-write(sprintf('Loading file %s...', pileup), stderr())
-rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+    dir.create(dirname(xargs$out), recursive= TRUE, showWarnings= FALSE)
 
-# ------------- [Run FACETS] --------------
-
-write(sprintf('Preprocessing sample...'), stderr())
-xx<- preProcSample(rcmat[['pileup']], ndepth= xargs$depth[1], gbuild= xargs$gbuild, snp.nbhd= xargs$nbhd_snp, het.thresh= 0.25, cval= xargs$cval[1], deltaCN= 0, unmatched= FALSE, ndepthmax= xargs$depth[2])
-rcmat[['pileup']]<- NULL
-x_ <- gc(verbose= FALSE)
-
-write(sprintf('Processing sample...'), stderr())
-oo<- procSample(xx, cval= xargs$cval[2], min.nhet= 15, dipLogR= NULL)
-
-write(sprintf('Fitting model...'), stderr())
-fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps=1e-3)
-
-# -----------------------------------------
-
-write(sprintf('Writing output'), stderr())
-out<- data.table(fit$cncf)
-
-# Reset chrom X
-if(xargs$gbuild %in% c('hg19', 'hg38')){
-    out[, chrom := ifelse(chrom == 23, 'X', chrom)]
-} else if(xargs$gbuild %in% c('mm9', 'mm10')){
-    out[, chrom := ifelse(chrom == 20, 'X', chrom)]
-} else {
-    quit(status= 1)
-}
-# Reset chrom names
-if(rcmat$chr_prefix == TRUE){
-    out[, chrom := paste0('chr', chrom)]
-}
-setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
-
-# Classify CNV. See also https://github.com/mskcc/facets/issues/62
-out[, type := NA]
-out[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
-out[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
-out[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
-out[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
-out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
-out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
-out<- out[order(chrom, start)]
-stopifnot(all(!is.na(out$type))) # Everything has been classified
-
-if(is.null(xargs$annotation) == FALSE){
-    out<- annotate(out, xargs$annotation)
-}
-
-vcf_tmp<- tempfile(pattern= paste0(basename(xargs$out), '.'), tmpdir= dirname(xargs$out), fileext= '.vcf')
-
-write('##fileformat=VCFv4.2', vcf_tmp, append= FALSE)
-write(sprintf('##reference=%s', xargs$gbuild), vcf_tmp, append= TRUE)
-write('##FILTER=<ID=PASS,Description="All filters passed">', vcf_tmp, append= TRUE)
-
-# Write contigs to header
-# --------------------------
-if(xargs$gbuild == 'hg19') {chrom_size<- HG19}
-if(xargs$gbuild == 'hg38') {chrom_size<- HG38}
-if(xargs$gbuild == 'mm9') {chrom_size<- MM9}
-if(xargs$gbuild == 'mm10') {chrom_size<- MM10}
-
-for(i in 1:length(chrom_size)){
-    size<- chrom_size[i]
-    name<- names(size)
-    if(rcmat$chr_prefix != TRUE){
-        name<- sub('^chr', '', name)
+    if(xargs$rnd_seed == def_rnd){
+        if( ! is.null(xargs$pileup) ){
+            seed<- sum(utf8ToInt(xargs$pileup))
+        } else {
+            seed<- sum(utf8ToInt(paste(xargs$snp_normal, xargs$snp_tumour)))
+        }
+    } else if( ! is.na(suppressWarnings(as.numeric(xargs$rnd_seed)))){
+        seed<- as.numeric(xargs$rnd_seed)
+    } else {
+        seed<- sum(utf8ToInt(xargs$rnd_seed))
     }
-    write(sprintf('##contig=<ID=%s,length=%s>', name, size), vcf_tmp, append= TRUE)
+    set.seed(seed)
+
+    if(is.null(xargs$pileup)){
+        pileup<- paste0(xargs$out, '.csv.gz')
+        basename(xargs$snp_tumour)
+        exec_snp_pileup_parallel(snp_vcf= xargs$snp_vcf, 
+                                 output= pileup, 
+                                 normal_bam= xargs$snp_normal, 
+                                 tumour_bam= xargs$snp_tumour, 
+                                 mapq= xargs$snp_mapq, 
+                                 baq= xargs$snp_baq, 
+                                 pseudo_snp= nbhd_snp,
+                                 nprocs= ceiling(xargs$snp_nprocs / 2)
+                                 )
+    } else {
+        pileup<- xargs$pileup
+    }
+
+    write(sprintf('Loading file %s...', pileup), stderr())
+    rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+
+    # ------------- [Run FACETS] --------------
+
+    write(sprintf('Preprocessing sample...'), stderr())
+    xx<- preProcSample(
+           rcmat= rcmat[['pileup']],
+           gbuild= xargs$gbuild, 
+           snp.nbhd= nbhd_snp, 
+           het.thresh= 0.25, 
+           cval= xargs$cval[1], 
+           deltaCN= 0, 
+           unmatched= FALSE, 
+           ndepth= xargs$depth[1], 
+           ndepthmax= xargs$depth[2]
+    )
+    rcmat[['pileup']]<- NULL
+    x_ <- gc(verbose= FALSE)
+
+    write(sprintf('Processing sample...'), stderr())
+    oo<- procSample(xx, cval= xargs$cval[2], min.nhet= 15, dipLogR= NULL)
+
+    write(sprintf('Fitting model...'), stderr())
+    fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps=1e-3)
+
+    # -----------------------------------------
+
+    write(sprintf('Writing output'), stderr())
+    out<- data.table(fit$cncf)
+
+    # Reset chrom X
+    if(xargs$gbuild %in% c('hg19', 'hg38')){
+        out[, chrom := ifelse(chrom == 23, 'X', chrom)]
+    } else if(xargs$gbuild %in% c('mm9', 'mm10')){
+        out[, chrom := ifelse(chrom == 20, 'X', chrom)]
+    } else {
+        quit(status= 1)
+    }
+    # Reset chrom names
+    if(rcmat$chr_prefix == TRUE){
+        out[, chrom := paste0('chr', chrom)]
+    }
+    setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
+
+    # Classify CNV. See also https://github.com/mskcc/facets/issues/62
+    out[, type := NA]
+    out[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
+    out[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
+    out[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
+    out[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
+    out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
+    out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
+    out<- out[order(chrom, start)]
+    stopifnot(all(!is.na(out$type))) # Everything has been classified
+
+    if(is.null(xargs$annotation) == FALSE){
+        out<- annotate(out, xargs$annotation)
+    }
+
+    vcf_tmp<- tempfile(pattern= paste0(basename(xargs$out), '.'), tmpdir= dirname(xargs$out), fileext= '.vcf')
+    cmd<- sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time())
+    header<- make_header(gbuild= xargs$gbuild, genomes= genomes, 
+        is_chrom_prefixed= rcmat$chr_prefix, cmd= cmd, 
+        extra= c(purity= fit$purity, ploidy= fit$ploidy, dipLogR= fit$dipLogR, emflags= fit$emflags))
+    write(header, vcf_tmp)
+
+    for(i in 1:nrow(out)){
+        write(paste(facetsRecordToVcf(out[i]), collapse= '\t'), vcf_tmp, append= TRUE)
+    }
+
+    x_<- bgzip(vcf_tmp, dest= paste0(xargs$out, '.vcf.gz'), overwrite= TRUE)
+    x_<- indexTabix(paste0(xargs$out, '.vcf.gz'), format= 'vcf4')
+    unlink(vcf_tmp)
+
+    write(sprintf('Plotting genome...'), stderr())
+    png(paste0(xargs$out, '.cnv.png'), units="px", width=1600, height=1600, res=300)
+    sname<- sprintf('%s; ploidy= %.2f; purity= %.2f', basename(xargs$out), fit$ploidy, fit$purity)
+    plotSample(x=oo, emfit=fit, sname= sname)
+    x_ <- dev.off()
+
+    write(sprintf('Plotting spider...'), stderr())
+    pdf(paste0(xargs$out, '.spider.pdf'), width= 16/2.54, height= 14/2.54)
+    par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
+    logRlogORspider(oo$out, oo$dipLogR)
+    x_ <- dev.off()
+
+    si<- capture.output(sessionInfo())
+    write(si, stderr())
 }
-# --------------------------
-
-write('##FILTER=<ID=PASS,Description="All filters passed">', vcf_tmp, append= TRUE)
-write('##FILTER=<ID=neutral,Description="Copy number neutral">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=NUM_MARK,Number=1,Type=Integer,Description="Number of SNPs in the segment">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=NHET,Number=1,Type=Integer,Description="Number of SNPs that are deemed heterozygous">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=CNLR_MEDIAN,Number=1,Type=Float,Description="Median log-ratio (logR) of the segment. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=CNLR_MEDIAN_CLUST,Number=1,Type=Float,Description="Median log-ratio (logR) of the segment cluster. logR is defined by the log-ratio of total read depth in the tumor versus that in the normal">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=MAF_R,Number=1,Type=Float,Description="Log-odds-ratio (logOR) summary for the segment. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus in the normal">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=MAF_R_CLUST,Number=1,Type=Float,Description="Log-odds-ratio (logOR) summary for the segment cluster. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus that in the normal">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=SEGCLUST,Number=1,Type=Integer,Description="Segment cluster to which the segment belongs">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=CF_EM,Number=1,Type=Float,Description="Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=TCN_EM,Number=1,Type=Integer,Description="Total copy number. 2 for normal diploid">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=LCN_EM,Number=1,Type=Integer,Description="Lesser (minor) copy number. 1 for normal diploid">', vcf_tmp, append= TRUE)
-write('##INFO=<ID=CNV_ANN,Number=.,Type=String,Description="Annotation features assigned to this CNV">', vcf_tmp, append= TRUE)
-write('##ALT=<ID=CNV,Description="Copy number variable region">', vcf_tmp, append= TRUE)
-
-write(sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time()), vcf_tmp, append= TRUE)
-
-write(paste0('##purity=', fit$purity), vcf_tmp, append= TRUE)
-write(paste0('##ploidy=', fit$ploidy), vcf_tmp, append= TRUE)
-write(paste0('##dipLogR=', fit$dipLogR), vcf_tmp, append= TRUE)
-write(paste0('##emflags="', fit$emflags, '"'), vcf_tmp, append= TRUE)
-
-write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO', vcf_tmp, append= TRUE)
-
-for(i in 1:nrow(out)){
-    write(paste(facetsRecordToVcf(out[i]), collapse= '\t'), vcf_tmp, append= TRUE)
-}
-
-x_<- bgzip(vcf_tmp, dest= paste0(xargs$out, '.vcf.gz'), overwrite= TRUE)
-x_<- indexTabix(paste0(xargs$out, '.vcf.gz'), format= 'vcf4')
-unlink(vcf_tmp)
-
-write(sprintf('Plotting genome...'), stderr())
-png(paste0(xargs$out, '.cnv.png'), units="px", width=1600, height=1600, res=300)
-sname<- sprintf('%s; ploidy= %.2f; purity= %.2f', basename(xargs$out), fit$ploidy, fit$purity)
-plotSample(x=oo, emfit=fit, sname= sname)
-x_ <- dev.off()
-
-write(sprintf('Plotting spider...'), stderr())
-pdf(paste0(xargs$out, '.spider.pdf'), width= 16/2.54, height= 14/2.54)
-par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
-logRlogORspider(oo$out, oo$dipLogR)
-x_ <- dev.off()
-
-si<- capture.output(sessionInfo())
-write(si, stderr())
