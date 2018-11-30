@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.com/dariober/cnv_facets.svg?branch=master)](https://travis-ci.com/dariober/cnv_facets)
+[![Build Status](https://travis-ci.org/wwcrc/cnv_facets.svg?branch=master)](https://travis-ci.org/wwcrc/cnv_facets)
 [![Language](https://img.shields.io/badge/language-R-brightgreen.svg)](https://cran.r-project.org/)
-[![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/dariober/cnv_facets)
+[![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/wwcrc/cnv_facets)
 
 Somatic copy variant caller for next generation sequencing data based on the
 [FACETS](https://github.com/mskcc/facets) package
