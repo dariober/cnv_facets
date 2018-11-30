@@ -71,3 +71,10 @@ tryCatch({
         devtools::install_github("mskcc/facets", ref = "434b5ce", lib= lib)
     }
 )
+
+tryCatch({
+        suppressMessages(library(testthat))
+    }, error = function(err) {
+        install.packages('testthat', repos= repos, lib)
+    }
+)

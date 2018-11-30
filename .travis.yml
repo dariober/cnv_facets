@@ -16,4 +16,5 @@ install:
 
 script:
     - bash setup.sh -b foo/bar 2> err.log || true && grep --silent 'Error' err.log && rm err.log
+    - cd test && Rscript testthat.R
     - cd test && python test_cnv_facets.py
