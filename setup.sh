@@ -194,6 +194,16 @@ chmod a+x bin/cnv_facets.R
 rsync --update bin/cnv_facets.R ${bin_dir}
 cnv_facets.R --help
 
+# VCF validator - Only for testing
+if [[ "$OSTYPE" == "darwin"* ]]; 
+then
+    curl -L -o test/vcf_validator -s https://github.com/EBIvariation/vcf-validator/releases/download/v0.9.1/vcf_validator_macos
+else
+    curl -L -o test/vcf_validator -s https://github.com/EBIvariation/vcf-validator/releases/download/v0.9.1/vcf_validator_linux
+fi
+chmod a+x test/vcf_validator
+./test/vcf_validator --help
+
 set +x
 rm -rf tmp
 echo -e "\n\033[32mSetup successfully completed\033[0m"
