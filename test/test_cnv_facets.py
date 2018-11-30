@@ -40,6 +40,23 @@ def vcf_to_list(vcf_file):
             vcf.append(line.decode())
     return vcf
 
+def vcf_validator(vcf_file):
+    """Run vcf_validator and scan the report file. Return empty string if vcf
+    file is valid otherwise print the content of the report
+    """
+    p = sp.Popen("gzip -c -d %s | ./vcf_validator --report text" % vcf_file, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+    stdout, stderr = p.communicate()
+    log= stderr.decode().split('\n')
+    rfile= [x for x in log if x.startswith('[info] Text report written to : ')]
+    assert len(rfile) == 1
+    rfile= rfile[0].replace('[info] Text report written to : ', '')
+    with open(rfile) as f:
+        report= f.readlines()
+    os.remove(rfile)
+    if len(report) == 1 and 'the input file is valid' in report[0]:
+        return ''
+    return ''.join(''.join(report))
+
 class cnv_facets(unittest.TestCase):
 
     def setUp(self):
@@ -64,6 +81,7 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testUncompressedPileupInput(self):
         p = sp.Popen("../bin/cnv_facets.R -p data/pileup.csv -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -72,6 +90,7 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testParallel(self):
         p = sp.Popen("../bin/cnv_facets.R -N 3 -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -90,6 +109,8 @@ class cnv_facets(unittest.TestCase):
         self.assertEquals(['20', '21', '22'], list(chroms.keys()))
         self.assertTrue([chroms[x] > 10 for x in chroms.keys()])
 
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
+
     def testBamInput(self):
         p = sp.Popen("../bin/cnv_facets.R -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
@@ -98,6 +119,7 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testFailOnSnpPileup(self):
         p = sp.Popen("../bin/cnv_facets.R -t data/INVALID.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -114,6 +136,7 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testEnsemblChromsomes(self):
         p = sp.Popen("../bin/cnv_facets.R -g hg38 -p data/stomach.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -132,6 +155,7 @@ class cnv_facets(unittest.TestCase):
 
         for rec in vcf:
             self.assertTrue( not rec.startswith('23\t'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
         
     def testUcscChromsomes(self):
         p = sp.Popen("../bin/cnv_facets.R -g hg38 -p data/stomach_chr.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -153,6 +177,7 @@ class cnv_facets(unittest.TestCase):
                 continue
             self.assertTrue(rec.startswith('chr'))
             self.assertTrue( not rec.startswith('chr23\t'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testMouseGenome(self):
         p = sp.Popen("../bin/cnv_facets.R -p data/stomach_chr.csv.gz -o test_out/out -g mm10", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -168,6 +193,7 @@ class cnv_facets(unittest.TestCase):
             self.assertTrue( not rec.startswith('chr20\t'))
             self.assertTrue( not rec.startswith('chr21t'))
             self.assertTrue( not rec.startswith('chr22\t'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testAnnotation(self):
         p = sp.Popen("../bin/cnv_facets.R -p data/stomach_chr.csv.gz -o test_out/out --annotation data/annotation.bed", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
@@ -190,6 +216,7 @@ class cnv_facets(unittest.TestCase):
                 self.assertTrue('CNV_ANN=.' in rec)
 
             self.assertTrue(not 'CNV_ANN=D' in rec) # Feature D does not intersect any CNV
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testEmptyAnnotation(self):
         """What do we get when no annotation file is provided?
@@ -203,6 +230,7 @@ class cnv_facets(unittest.TestCase):
             if rec.startswith('#'):
                 continue
             self.assertTrue('CNV_ANN=.' in rec)
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
 if __name__ == '__main__':
     unittest.main()
