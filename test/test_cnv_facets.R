@@ -36,10 +36,16 @@ teardown({
     unlink('tmp_testthat', recursive= TRUE)
 })
 
+test_that("Can classify CNVs", {
+    cnv<- fread('data/cnv_classification.tsv')
+    classify_cnv(cnv)
+    expect_true(all(cnv$cnv_type == cnv$type))
+})
+
 test_that("Can write header", {
     header<- make_header(gbuild= 'hg38', genomes= genomes, is_chrom_prefixed= TRUE, cmd= '##Command foo bar', extra= c(purity= 0.5, ploidy= 3.1))
     header<- unlist(strsplit(header, split= '\n'))
-    expect_equal(49, length(header))
+    expect_equal(48, length(header))
     expect_true(all(grepl('^##|^#CHROM\t', header)))
     expect_true('##purity=0.5' %in% header)
     expect_true('##ploidy=3.1' %in% header)

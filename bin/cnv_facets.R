@@ -29,7 +29,7 @@ suppressMessages(library(Rsamtools))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.8.0; facets %s', packageVersion('facets'))
+VERSION= sprintf('0.9.0; facets %s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -459,8 +459,7 @@ make_header<- function(gbuild, genomes, is_chrom_prefixed, cmd, extra){
     # extra: Named vector of additional information. E.g. c(purity=0.5, ploidy= 2.1) 
     header<- c(
         '##fileformat=VCFv4.2',
-        sprintf('##reference=%s', gbuild),
-        '##FILTER=<ID=PASS,Description="All filters passed">'
+        sprintf('##reference=%s', gbuild)
     )
     # Contigs
     # --------------------------
@@ -512,6 +511,21 @@ make_header<- function(gbuild, genomes, is_chrom_prefixed, cmd, extra){
     }
     header<- c(header, '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO')
     return(paste(header, collapse= '\n'))
+}
+
+classify_cnv<- function(dat){
+    # Classify CNV. See also https://github.com/mskcc/facets/issues/62
+    # dat is a data.table modifed in-place
+    dat[, type := NA]
+    dat[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 2, 'DUP', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
+    dat[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
+    stopifnot(all(!is.na(dat$type))) # Everything has been classified
+    return(dat)
 }
 
 if(sys.nframe() == 0){
@@ -634,17 +648,20 @@ if(sys.nframe() == 0){
         out[, chrom := paste0('chr', chrom)]
     }
     setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
+    
+    classify_cnv(out)
 
     # Classify CNV. See also https://github.com/mskcc/facets/issues/62
-    out[, type := NA]
-    out[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
-    out[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
-    out[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
-    out[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
-    out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
-    out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
+    #out[, type := NA]
+    #out[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
+    #out[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
+    #out[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
+    #out[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
+    #out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
+    #out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
+    #stopifnot(all(!is.na(out$type))) # Everything has been classified
+
     out<- out[order(chrom, start)]
-    stopifnot(all(!is.na(out$type))) # Everything has been classified
 
     if(is.null(xargs$annotation) == FALSE){
         out<- annotate(out, xargs$annotation)

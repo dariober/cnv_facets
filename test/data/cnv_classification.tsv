@@ -1,0 +1,14 @@
+tcn.em	lcn.em	cnv_type	comment
+0	0	DEL	
+0	NA	DEL	
+1	0	HEMIZYG	
+1	1	HEMIZYG	Should not happen
+1	NA	HEMIZYG	
+2	0	LOH	
+2	1	NEUTR	
+2	2	DUP	Should not happen
+2	NA	NEUTR	
+3	0	DUP-LOH	
+3	1	DUP	
+3	2	DUP	
+3	NA	DUP	
