@@ -22,6 +22,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+install.packages('covr', repos= 'https://cran.r-project.org')
 library(covr)
 xcov<- file_coverage(source_files= '../bin/cnv_facets.R', 
                      test_files= 'test_cnv_facets.R')
