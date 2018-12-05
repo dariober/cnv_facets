@@ -7,6 +7,7 @@ Somatic copy variant caller for next generation sequencing data based on the
 
 <!-- vim-markdown-toc GFM -->
 
+* [Quick start](#quick-start)
 * [Requirements and Installation](#requirements-and-installation)
 * [Input](#input)
     * [Option 1: BAM & VCF input](#option-1-bam--vcf-input)
@@ -14,21 +15,48 @@ Somatic copy variant caller for next generation sequencing data based on the
 * [Output](#output)
     * [Variants](#variants)
     * [CNV profile plot](#cnv-profile-plot)
+    * [Histograms of depth of coverage](#histograms-of-depth-of-coverage)
     * [Diagnostic plot](#diagnostic-plot)
     * [Pileup file](#pileup-file)
 * [Usage guidelines](#usage-guidelines)
-* [Time & memory footprint](#time--memory-footprint)
+    * [Command options](#command-options)
+    * [Filtering output for relevant CNVs](#filtering-output-for-relevant-cnvs)
+* [Time and memory footprint](#time-and-memory-footprint)
 
 <!-- vim-markdown-toc -->
 
 **cnv_facets.R** detects somatic Copy Number Variants (CNVs) from next
-generation sequencing data such as *whole genome*, *whole exome* and *targeted
-sequencing* experiments. In addition, it estimates tumour purity and ploidy.
-cnv_facets.R is based on the original package [FACETS](https://github.com/mskcc/facets)
+generation sequencing data such as **whole genome**, **whole exome** and
+**targeted sequencing** experiments. In addition, it estimates tumour purity
+and ploidy.  The core of *cnv_facets.R* is the
+[FACETS](https://github.com/mskcc/facets) package by R Shen and VE Seshan
+[FACETS: allele-specific copy number and clonal heterogeneity analysis tool for
+high-throughput DNA sequencing, *Nucleic Acids Res*, 2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
 
 The advantage of **cnv_facets.R** over the original [FACETS](https://github.com/mskcc/facets) 
 package is in the convenience of executing all the necessary steps, from BAM input to VCF 
 output, in a single command line call.
+
+Quick start
+===========
+
+Install:
+
+```
+bash setup.sh --bin_dir </dir/on/path>
+```
+
+Run CNV analysis:
+
+```
+cnv_facets.R -t <tumour.bam> -n <normal.bam> -vcf <snps.vcf.gz> -o <output_prefix>
+```
+
+Get help:
+
+```
+cnv_facets.R -h
+```
 
 Requirements and Installation
 =============================
@@ -160,6 +188,18 @@ Summary plot of CNVs across the genome, for [example](./docs/tex.cnv.png):
 
 <img src="./docs/tex.cnv.png" height="600"/>
 
+Histograms of depth of coverage
+------------------------------
+
+* `<prefix>.cov.pdf`
+
+Histograms of the distribution of read depth (coverage) across all the position
+in the tumour and normal sample, before and after filtering positions. These
+plots are useful to assess whether the sequencing depth and depth of covarage
+thresholds are appropriate.
+
+<img src="./docs/stomach_panel.cov.png" height="600"/>
+
 Diagnostic plot
 ---------------
 
@@ -185,13 +225,21 @@ File of nucleotide counts at each SNP in normal and tumour sample.
 Usage guidelines
 ================
 
-* Option `--cval`
+Command options
+---------------
+
+* `--depth`
+
+Use the histograms of depth to set appropriate thresholds. Consider also the option
+`--targets` for targeted sequence libraries.
+
+* `--cval`
 
 Critical values for segmentation in pre-processing and processing.
 Larger values reduce segmentation. [25 150] is facets default based on exome data. For whole genome
 consider increasing to [25 400] and for targeted sequencing consider reducing them. Default 25 150
 
-* Option `--nbhd-snp`
+* `--nbhd-snp`
 
 If an interval of size nbhd-snp contains more than one SNP, sample a random one.
 This sampling reduces the SNP serial correlation. This value should be similar
@@ -199,8 +247,25 @@ to the median insert size of the libraries. 250 is facets default based on
 exome data. For whole genome consider increasing to 500 and for target
 sequencing decrease to 150. Default 250
 
-Time & memory footprint
-=======================
+Filtering output for relevant CNVs 
+----------------------------------
+
+* CNLR_MEDIAN_CLUST
+
+USe this VCF tag to filter for records where the difference in read depth
+coverage between tumour and normal. The tag `CNLR_MEDIAN` should be well
+correlated with `CNLR_MEDIAN_CLUST` so using one or the other should not make
+much difference. Use the plot of CNV profile, log-ratio panel of
+`<prefix>.cnv.png` to decide on a sensible thresholds.
+
+* MAF_R_CLUST
+
+Use this VCF tag to filter for CNVs significant difference in tumour allele
+frequency. Use the plot of CNV profile, log-odds-ratio panel of `<prefix>.cnv.png`
+to decide on a sensible thresholds. As above MAF_R_CLUST is correlated with MAF_R.
+
+Time and memory footprint
+=========================
 
 The analysis of a whole genome sequence where the
 tumour is sequenced at ~80x (~2 billion reads, BAM file ~200 GB) and the normal
