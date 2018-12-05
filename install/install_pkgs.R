@@ -59,6 +59,20 @@ tryCatch({
 )
 
 tryCatch({
+        suppressMessages(library(ggplot2))
+    }, error = function(err) {
+        install.packages('ggplot2', repos= repos, lib)
+    }
+)
+
+tryCatch({
+        suppressMessages(library(gridExtra))
+    }, error = function(err) {
+        install.packages('gridExtra', repos= repos, lib)
+    }
+)
+
+tryCatch({
         suppressMessages(library(argparse))
     }, error = function(err) {
         devtools::install_github("trevorld/argparse", ref= "v1.1.1", repos= repos, lib= lib)

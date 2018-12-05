@@ -36,6 +36,31 @@ teardown({
     unlink('tmp_testthat', recursive= TRUE)
 })
 
+test_that("Can filter for target region", {
+    rcmat<- fread('gzip -c -d data/rcmat.txt.gz')
+    flt<- filter_rcmat(rcmat, min_ndepth= 60, max_ndepth= 200, target= NULL)
+    expect_equal(60, min(flt$NOR.DP))    
+    expect_equal(199, max(flt$NOR.DP))    
+    expect_true(nrow(flt) > 1000)
+    
+    flt<- filter_rcmat(rcmat, min_ndepth= 115, max_ndepth= 2000, target= 'data/targets.bed')
+    print(flt)
+    expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
+    expect_equal(115, min(flt$NOR.DP))
+    expect_equal(69515, min(flt$Position))
+    expect_equal(879546, max(flt$Position))
+    expect_equal(10, nrow(flt))
+
+    ## Test overlap or depth returns 0 positions
+    flt<- filter_rcmat(rcmat, min_ndepth= 10000, max_ndepth= 11000, target= 'data/targets.bed')
+    expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
+    expect_equal(0, nrow(flt))
+
+    flt<- filter_rcmat(rcmat[Position > 1000000], min_ndepth= 1, max_ndepth= 11000, target= 'data/targets.bed')
+    expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
+    expect_equal(0, nrow(flt))
+})
+
 test_that("Can classify CNVs", {
     cnv<- fread('data/cnv_classification.tsv')
     classify_cnv(cnv)
@@ -80,7 +105,7 @@ test_that("Can execute pileup on chrom", {
     expect_equal(21, unique(csv$Chromosome)) 
 })
 
-test_that("Pileup thorws error if bash script throws error", {
+test_that("Pileup throws error if bash script throws error", {
     mkdir()
     expect_error(
         exec_snp_pileup(21, 'data/common.sample.vcf.gz', 'tmp_testthat/tmp.cvs.gz', 
@@ -102,4 +127,11 @@ test_that("Can concatenate CSVs", {
     expect_equal(599694, nrow(csv))
     expect_equal('Chromosome', names(csv)[1])
     expect_false('Chromosome' %in% csv$Chromosome)
+})
+
+test_that("Can plot coverage histogram", {
+    mkdir()
+    rcmat<- fread('gzip -c -d data/rcmat.txt.gz')
+    plot_coverage(rcmat, rcmat[NOR.DP > 100], fname= 'tmp_testthat/hist.pdf', title= 'Depth of coverage\nmy/output/prefix')
+    expect_true(file.size('tmp_testthat/hist.pdf') > 1000)
 })
