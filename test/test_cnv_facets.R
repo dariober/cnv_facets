@@ -44,7 +44,6 @@ test_that("Can filter for target region", {
     expect_true(nrow(flt) > 1000)
     
     flt<- filter_rcmat(rcmat, min_ndepth= 115, max_ndepth= 2000, target= 'data/targets.bed')
-    print(flt)
     expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
     expect_equal(115, min(flt$NOR.DP))
     expect_equal(69515, min(flt$Position))
