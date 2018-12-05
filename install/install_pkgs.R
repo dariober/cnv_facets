@@ -39,7 +39,7 @@ if(is.null(lib)){
 tryCatch({
         suppressMessages(library(devtools))
     }, error = function(err) {
-        install.packages('devtools', repos= repos, lib= lib)
+        install.packages('devtools', repos= repos, lib= lib, Ncpus= 6)
     }
 )
 
@@ -47,28 +47,28 @@ tryCatch({
         suppressMessages(library(Rsamtools))
     }, error = function(err) {
         source("https://bioconductor.org/biocLite.R")
-        biocLite("Rsamtools", ask= FALSE, suppressUpdates= TRUE, lib= lib)
+        biocLite("Rsamtools", ask= FALSE, suppressUpdates= TRUE, lib= lib, Ncpus= 6)
     }
 )
 
 tryCatch({
         suppressMessages(library(data.table))
     }, error = function(err) {
-        install.packages('data.table', repos= repos, lib)
+        install.packages('data.table', repos= repos, lib, Ncpus= 6)
     }
 )
 
 tryCatch({
         suppressMessages(library(ggplot2))
     }, error = function(err) {
-        install.packages('ggplot2', repos= repos, lib)
+        install.packages('ggplot2', repos= repos, lib, Ncpus= 6)
     }
 )
 
 tryCatch({
         suppressMessages(library(gridExtra))
     }, error = function(err) {
-        install.packages('gridExtra', repos= repos, lib)
+        install.packages('gridExtra', repos= repos, lib, Ncpus= 6)
     }
 )
 
@@ -89,6 +89,13 @@ tryCatch({
 tryCatch({
         suppressMessages(library(testthat))
     }, error = function(err) {
-        install.packages('testthat', repos= repos, lib)
+        install.packages('testthat', repos= repos, lib, Ncpus= 6)
+    }
+)
+
+tryCatch({
+        suppressMessages(library(covr))
+    }, error = function(err) {
+        install.packages('covr', repos= repos, lib, Ncpus= 6)
     }
 )

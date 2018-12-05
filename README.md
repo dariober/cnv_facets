@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/wwcrc/cnv_facets.svg?branch=master)](https://travis-ci.org/wwcrc/cnv_facets)
+[![Coverage Status](https://codecov.io/gh/wwcrc/icnv_facets/branch/master/graph/badge.svg)](https://codecov.io/gh/wwcrc/cnv_facets/branch/master)
 [![Language](https://img.shields.io/badge/language-R-brightgreen.svg)](https://cran.r-project.org/)
 [![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/wwcrc/cnv_facets)
 
