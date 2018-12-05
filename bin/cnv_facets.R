@@ -26,6 +26,8 @@ suppressMessages(library(argparse))
 suppressMessages(library(facets))
 suppressMessages(library(data.table))
 suppressMessages(library(Rsamtools))
+suppressMessages(library(ggplot2))
+suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
@@ -80,6 +82,10 @@ of a previous run of cnv_facet.R', required= FALSE)
 
 def<- c(25, 4000)
 parser$add_argument('--depth', '-d', help= sprintf('Minimum and maximum depth in normal sample for a position to be considered. Default %s', paste(def, collapse= ' ')), type= 'integer', default= def, nargs= 2)
+
+parser$add_argument('--targets', '-T', help= sprintf('BED file of target regions to scan. It may be the target regions from WEX or\\n\\
+panel sequencing protocols. It is not required, even for targeted sequencing,\\n\\
+but it may improve the results'))
 
 def<- c(25, 150)
 parser$add_argument('--cval', '-cv', help= sprintf("Critical values for segmentation in pre-processing and processing.\\n\\
@@ -528,6 +534,67 @@ classify_cnv<- function(dat){
     return(dat)
 }
 
+prep_coverage_data<- function(rcmat){
+    # Reformat the rcmat data.table to make it suitable for plotting histogram
+    dhist<- melt(data= rcmat, id= 'Position', measure.vars= c('NOR.DP', 'TUM.DP'),
+        variable.name= 'sample', value.name= 'depth')
+    dhist[, foo := 'bar']
+    dhist[, Position := NULL]
+    dhist[, sample := ifelse(sample == 'NOR.DP', 'Normal', 'Tumour')]
+    dhist<- dhist[depth > 0]
+    dhist<- dhist[, list(depth= ifelse(.SD$depth > quantile(.SD$depth, 0.99), quantile(.SD$depth, 0.99), .SD$depth)), by= sample]
+    nsites<- dhist[, .N, by= sample]
+    dhist<- merge(dhist, nsites)
+    dhist[, label := paste(sample, 'N=', N)]
+    return(dhist)
+}
+
+plot_coverage<- function(rcmat, rcmat_flt, fname, title){
+    
+    xall<- ggplot(data= prep_coverage_data(rcmat), aes(x= depth)) +
+        geom_histogram(bins= 20, colour= 'white', fill= '#F8766D') +
+        facet_wrap(~ label) +
+        xlab('All positions [capped]') + 
+        theme(axis.title.x = element_text(colour = "#F8766D"))
+        
+    xflt<- ggplot(data= prep_coverage_data(rcmat_flt), aes(x= depth)) +
+        geom_histogram(bins= 20, colour= 'white', fill= '#00BFC4') +
+        facet_wrap(~ label) + 
+        xlab('Filtered positions [capped]') + 
+        theme(axis.title.x = element_text(colour = "#00BFC4"))
+
+    gg<- arrangeGrob(xall, xflt, top= title)
+    ggsave(fname, gg, width= 16, height= 18, units= 'cm')
+}
+
+filter_rcmat<- function(rcmat, min_ndepth, max_ndepth, target_bed){
+    rcmat_flt<- rcmat[NOR.DP >= min_ndepth & NOR.DP < max_ndepth]
+    if(is.null(target_bed) || nrow(rcmat_flt) == 0){
+        return(rcmat_flt)
+    }
+    # Read targets file
+    targets<- read.table(target_bed, comment.char= '#', header= FALSE, sep= '\t')
+    targets<- makeGRangesFromDataFrame(targets, seqnames.field= 'V1', 
+        start.field= 'V2', end.field= 'V3', starts.in.df.are.0based= TRUE)
+
+    # Convert rcmat to GRanges
+    rcmat_flt<- makeGRangesFromDataFrame(rcmat_flt, seqnames.field= 'Chromosome', 
+        start.field= 'Position', end.field= 'Position', keep.extra.columns= TRUE)
+    
+    hits<- findOverlaps(query= rcmat_flt, subject= targets, ignore.strand= TRUE)
+    
+    rcmat_flt<- as.data.table(rcmat_flt[unique(hits@from)])
+    rcmat_flt[, start := NULL]
+    rcmat_flt[, width := NULL]
+    rcmat_flt[, strand := NULL]
+    setnames(rcmat_flt, c('seqnames', 'end'), c('Chromosome', 'Position'))
+    # This is to print (i.e., for debugging) the data.table obj without calling
+    # print twice. See 2.23 at
+    # https://cran.r-project.org/web/packages/data.table/vignettes/datatable-faq.html#why-do-i-have-to-type-dt-sometimes-twice-after-using-to-print-the-result-to-console
+    rcmat_flt[]
+    return(rcmat_flt)
+}
+
 if(sys.nframe() == 0){
     # Script is being executed from the command line
 
@@ -606,29 +673,38 @@ if(sys.nframe() == 0){
 
     write(sprintf('Loading file %s...', pileup), stderr())
     rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+    rcmat_flt<- filter_rcmat(rcmat= rcmat[['pileup']], min_ndepth= xargs$depth[1], 
+        max_ndepth= xargs$depth[2], target_bed= xargs$targets)
+    
+    write(sprintf('Plotting histogram of coverage...'), stderr())
+    plot_coverage(rcmat= rcmat[['pileup']], rcmat_flt= rcmat_flt, 
+        fname= paste0(xargs$out, '.cov.pdf'), title= paste0('Depth of coverage\n', xargs$out))
+    rcmat[['pileup']]<- NULL
+    x_ <- gc(verbose= FALSE)
 
     # ------------- [Run FACETS] --------------
 
     write(sprintf('Preprocessing sample...'), stderr())
+    
     xx<- preProcSample(
-           rcmat= rcmat[['pileup']],
+           rcmat= rcmat_flt,
            gbuild= xargs$gbuild, 
            snp.nbhd= nbhd_snp, 
            het.thresh= 0.25, 
            cval= xargs$cval[1], 
            deltaCN= 0, 
            unmatched= FALSE, 
-           ndepth= xargs$depth[1], 
-           ndepthmax= xargs$depth[2]
+           ndepth= 0,     ## We subset the input matrix instead of using ndepth*
+           ndepthmax= 1e8 ## options
     )
-    rcmat[['pileup']]<- NULL
+    rcmat_flt<- NULL
     x_ <- gc(verbose= FALSE)
 
     write(sprintf('Processing sample...'), stderr())
     oo<- procSample(xx, cval= xargs$cval[2], min.nhet= 15, dipLogR= NULL)
 
     write(sprintf('Fitting model...'), stderr())
-    fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps=1e-3)
+    fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps= 1e-3)
 
     # -----------------------------------------
 
@@ -650,16 +726,6 @@ if(sys.nframe() == 0){
     setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
     
     classify_cnv(out)
-
-    # Classify CNV. See also https://github.com/mskcc/facets/issues/62
-    #out[, type := NA]
-    #out[, type := ifelse((tcn.em == 2 & (lcn.em == 1 | is.na(lcn.em))), 'NEUTR', type)]
-    #out[, type := ifelse(is.na(type) & tcn.em == 0, 'DEL', type)]
-    #out[, type := ifelse(is.na(type) & tcn.em > 2 & (lcn.em > 0 | is.na(lcn.em)), 'DUP', type)]
-    #out[, type := ifelse(is.na(type) & tcn.em == 1, 'HEMIZYG', type)]
-    #out[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
-    #out[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
-    #stopifnot(all(!is.na(out$type))) # Everything has been classified
 
     out<- out[order(chrom, start)]
 
