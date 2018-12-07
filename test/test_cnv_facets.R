@@ -36,7 +36,136 @@ teardown({
     unlink('tmp_testthat', recursive= TRUE)
 })
 
-test_that("Can filter for target region", {
+test_that("Can annotate intervals", {
+    
+    # One CNV multiple annotations
+    cnv<- data.table(chrom= 'chr1', start= 29649111, end= 29662081)
+    annotate(cnv, 'data/annotation.bed')
+    expect_equal('C,D', cnv$annotation)
+    
+    # CNV is neutral
+    cnv<- data.table(chrom= 'chr1', start= 29649111, end= 29662081, type= 'NEUTR')
+    annotate(cnv, 'data/annotation.bed')
+    expect_true(is.na(cnv$annotation))
+
+    # CNV does not overlap any annotation
+    cnv<- data.table(chrom= c('chr1', 'chr18'), start= c(1, 1), end= c(100, 100))
+    annotate(cnv, 'data/annotation.bed')
+    expect_true(all(is.na(cnv$annotation)))
+
+    # One annotation maps to multiple CNVs
+    cnv<- data.table(chrom= c('chr2', 'chr2'), start= c(1, 1000), end= c(10, 1010))    
+    annotate(cnv, 'data/annotation.bed')
+    expect_equal(c('F', 'F'), cnv$annotation)
+
+    # Annotation record has no actual annotation in col 4
+    cnv<- data.table(chrom= c('chr4', 'chr4'), start= c(1, 1000), end= c(10, 1010))    
+    annotate(cnv, 'data/annotation.bed')
+    expect_true(all(is.na(cnv$annotation)))
+
+    cnv<- data.table(chrom= c('chr1', 'chr18', 'chr4'), 
+                     start= c(69000, 1, 20000), 
+                     end=   c(70000, 10, 20000)
+          )
+    annotate(cnv, 'data/annotation.bed')
+    expect_equal(c('chr1', 'chr18', 'chr4'), cnv$chrom)
+    expect_equal(c('A,B,gene%3Db%3BGene%2CFoo', NA, NA), cnv$annotation)
+})
+
+test_that("Can run facets", {
+    rcmat<- fread('gzip -c -d data/rcmat.txt.gz')
+    facets<- run_facets(
+           pre_rcmat= rcmat,
+           pre_gbuild= 'hg38', 
+           pre_snp.nbhd= 250,
+           pre_het.thresh= 0.25, 
+           pre_cval= 25, 
+           pre_deltaCN= 0, 
+           pre_unmatched= FALSE, 
+           pre_ndepth= 1,
+           pre_ndepthmax= 1e8,
+           proc_cval= 250, 
+           proc_min.nhet= 15, 
+           proc_dipLogR= NULL,
+           emcncf_unif= FALSE, 
+           emcncf_min.nhet= 15,
+           emcncf_maxiter= 20,
+           emcncf_eps= 1e-3)
+    expect_true(is.data.table(facets$emcncf_fit$cncf))
+})
+
+test_that("Can convert facets record to VCF", {
+    x<- data.table(seg= 1, 
+                   chrom= 'chr1',
+                   num.mark=10, 
+                   nhet=20, 
+                   cnlr.median=0.1, 
+                   mafR=0.2, 
+                   segclust= 2, 
+                   cnlr.median.clust= 0.3, 
+                   mafR.clust= 0.4,
+                   start= 100,
+                   end= 200,
+                   cf.em= 0.8,
+                   tcn.em= 2,
+                   lcn.em= 1,
+                   type= 'NEUTR',
+                   annotation= NA)
+    vcf<- facetsRecordToVcf(x)
+    expect_equal(8, length(vcf))
+    expect_equal('chr1', vcf[1])
+    expect_true(grepl('SVTYPE', vcf[8]))
+    expect_true(grepl('CNV_ANN=.', vcf[8]))
+    x$annotation<- 'ACTB,KRAS'
+    vcf<- facetsRecordToVcf(x)
+    expect_true(grepl('CNV_ANN=ACTB,KRAS', vcf[8]))
+})
+
+test_that("Can reset chroms", {
+    cncf<- data.table(chrom= rep(1:23, each= 2))
+    reset_chroms(cncf, gbuild= 'hg38', chr_prefix= FALSE)
+    expect_equal(rep(c(1:22, 'X'), each= 2), cncf$chrom) 
+
+    cncf<- data.table(chrom= rep(1:23, each= 2))
+    reset_chroms(cncf, gbuild= 'hg38', chr_prefix= TRUE)
+    expect_equal(paste0('chr', rep(c(1:22, 'X'), each= 2)), cncf$chrom)
+
+    cncf<- data.table(chrom= rep(1:20, each= 2))
+    reset_chroms(cncf, gbuild= 'mm10', chr_prefix= TRUE)
+    expect_equal(paste0('chr', rep(c(1:19, 'X'), each= 2)), cncf$chrom)
+
+    cncf<- data.table(chrom= rep(1:21, each= 2))
+    expect_error(
+        reset_chroms(cncf, gbuild= 'mm10', chr_prefix= TRUE)
+    )
+
+    cncf<- data.table(chrom= c(1:22, 'X', 'Y'))
+    expect_error(
+        reset_chroms(cncf, gbuild= 'hg38', chr_prefix= TRUE)
+    )
+
+    cncf<- data.table(chrom= c(1:22, 'X'))
+    expect_error(
+        reset_chroms(cncf, gbuild= 'FOO', chr_prefix= TRUE)
+    )
+})
+
+test_that("Can read SNP pileup", {
+    rcmat<- readSnpMatrix2('data/stomach.csv.gz', 'hg38')
+    expect_false(rcmat$chr_prefix)
+    expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(rcmat$pileup)))
+    expect_equal(299847, nrow(rcmat$pileup))
+    
+    system('gzip -c -d data/stomach.csv.gz > data/stomach.csv')
+    rcmat<- readSnpMatrix2('data/stomach.csv.gz', 'hg38')
+    unlink('data/stomach.csv')
+    expect_equal(299847, nrow(rcmat$pileup))
+
+    rcmat<- readSnpMatrix2('data/stomach_chr.csv.gz', 'hg38')
+    expect_true(rcmat$chr_prefix)
+})
+
+test_that("Can filter read count matrix", {
     rcmat<- fread('gzip -c -d data/rcmat.txt.gz')
     flt<- filter_rcmat(rcmat, min_ndepth= 60, max_ndepth= 200, target= NULL)
     expect_equal(60, min(flt$NOR.DP))    
@@ -104,6 +233,21 @@ test_that("Can execute pileup on chrom", {
     expect_equal(21, unique(csv$Chromosome)) 
 })
 
+test_that("Can execute parallel pileup", {
+    mkdir()
+    # snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs
+    exec_snp_pileup_parallel('data/common.sample.vcf.gz', 'tmp_testthat/tmp.cvs.gz', 
+        normal_bam= 'data/TCRBOA6-N-WEX.sample.bam', 
+        tumour_bam= 'data/TCRBOA6-T-WEX.sample.bam', 
+        mapq= 10, 
+        baq= 10, 
+        pseudo_snp= 250,
+        nprocs= 3)
+    expect_true(file.exists('tmp_testthat/tmp.cvs.gz'))
+    csv<- fread('gzip -c -d tmp_testthat/tmp.cvs.gz')
+    expect_equal(3, length(unique(csv$Chromosome)))
+})
+
 test_that("Pileup throws error if bash script throws error", {
     mkdir()
     expect_error(
@@ -134,3 +278,5 @@ test_that("Can plot coverage histogram", {
     plot_coverage(rcmat, rcmat[NOR.DP > 100], fname= 'tmp_testthat/hist.pdf', title= 'Depth of coverage\nmy/output/prefix')
     expect_true(file.size('tmp_testthat/hist.pdf') > 1000)
 })
+
+unlink('tmp_testthat', recursive= TRUE)

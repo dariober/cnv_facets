@@ -74,52 +74,25 @@ class cnv_facets(unittest.TestCase):
         self.assertEqual(0, p.returncode)
         self.assertTrue('--tumour', stderr.decode())
         
-    def testCompressedPileupInput(self):
-        p = sp.Popen("../bin/cnv_facets.R -p data/pileup.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
-        self.assertTrue(os.path.exists('test_out/out.cnv.png'))
-        self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
-        self.assertTrue(os.path.exists('test_out/out.cov.pdf'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testUncompressedPileupInput(self):
-        p = sp.Popen("../bin/cnv_facets.R -p data/pileup.csv -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
-        self.assertTrue(os.path.exists('test_out/out.cnv.png'))
-        self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testParallel(self):
-        p = sp.Popen("../bin/cnv_facets.R -d 1 8000 -N 3 -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out.csv.gz'))
-        f= gzip.open('test_out/out.csv.gz', 'rb').read().decode().strip().split('\n')
-
-        self.assertTrue(f[0].startswith('Chromosome'))
-        self.assertTrue(all([not x.startswith('chr') for x in f[1:]]))
-
-        chroms= OrderedDict({})
-        for line in f[1:]:
-            line= line.split(',')
-            chroms[line[0]]= chroms.get(line[0], 0) + 1
-        self.assertEqual(['20', '21', '22'], list(chroms.keys()))
-        self.assertTrue([chroms[x] > 10 for x in chroms.keys()])
-
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
     def testBamInput(self):
         p = sp.Popen("../bin/cnv_facets.R -d 1 8000 -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
         self.assertEqual(0, p.returncode)
         self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
         self.assertTrue(os.path.exists('test_out/out.cnv.png'))
+        self.assertTrue(os.path.exists('test_out/out.cov.pdf'))
         self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
+
+    def testPileupInput(self):
+        p = sp.Popen("../bin/cnv_facets.R --pileup data/stomach.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(0, p.returncode)
+        self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
+        self.assertTrue(os.path.exists('test_out/out.cnv.png'))
+        self.assertTrue(os.path.exists('test_out/out.cov.pdf'))
+        self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
         self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testFailOnSnpPileup(self):
@@ -128,119 +101,6 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(p.returncode != 0)
         # Check we exited immediatly after failing the first snp-pileup
         self.assertEqual(1, stderr.count('samtools view: failed to open'))
-
-
-    def testOutputFilesExist(self):
-        p = sp.Popen("../bin/cnv_facets.R -p data/stomach.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
-        self.assertTrue(os.path.exists('test_out/out.cnv.png'))
-        self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testFilterForTargetRegions(self):
-        p = sp.Popen("../bin/cnv_facets.R -g hg38 -p data/stomach.csv.gz -o test_out/out -T data/targets.bed", 
-                shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-        vcf= [x for x in vcf if not x.startswith('#')] 
-        self.assertEqual(1, len(vcf))
-
-    def testEnsemblChromsomes(self):
-        p = sp.Popen("../bin/cnv_facets.R -g hg38 -p data/stomach.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-
-        self.assertTrue('##contig=<ID=1,length=248956422>' in ''.join(vcf))
-        self.assertTrue('##contig=<ID=X,length=156040895>' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=chrX' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=chr23' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=23' in ''.join(vcf))
-        
-        self.assertTrue(vcf[-1].startswith('X\t'))
-
-        for rec in vcf:
-            self.assertTrue( not rec.startswith('23\t'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-        
-    def testUcscChromsomes(self):
-        p = sp.Popen("../bin/cnv_facets.R -g hg38 -p data/stomach_chr.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-
-        self.assertTrue('##contig=<ID=chr1,length=248956422>' in ''.join(vcf))
-        self.assertTrue('##contig=<ID=chrX,length=156040895>' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=X' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=chr23' in ''.join(vcf))
-        self.assertTrue( not 'contig=<ID=23' in ''.join(vcf))
-        
-        self.assertTrue(vcf[-1].startswith('chrX\t'))
-
-        for rec in vcf:
-            if rec.startswith('#'):
-                continue
-            self.assertTrue(rec.startswith('chr'))
-            self.assertTrue( not rec.startswith('chr23\t'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testMouseGenome(self):
-        p = sp.Popen("../bin/cnv_facets.R -p data/stomach_chr.csv.gz -o test_out/out -g mm10", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-        
-        self.assertTrue(vcf[-1].startswith('chrX\t'))
-        self.assertTrue('chr19' in ''.join(vcf))
-
-        for rec in vcf:
-            self.assertTrue( not rec.startswith('chr20\t'))
-            self.assertTrue( not rec.startswith('chr21t'))
-            self.assertTrue( not rec.startswith('chr22\t'))
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testAnnotation(self):
-        p = sp.Popen("../bin/cnv_facets.R -p data/stomach_chr.csv.gz -o test_out/out --annotation data/annotation.bed", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-
-        self.assertTrue('chr1\t69' in ''.join(vcf))
-
-        for rec in vcf:
-            if not rec.startswith('#'):
-                self.assertTrue('CNV_ANN' in rec)
-            
-            if rec.startswith('chr1\t69'):
-                # Multiple genes assigned to the same CNV
-                self.assertTrue('C,A,B,gene%3Db%3BGene%2CFoo' in rec)
-            
-            if 'NEUTR' in rec:
-                self.assertTrue('CNV_ANN=.' in rec)
-
-            self.assertTrue(not 'CNV_ANN=D' in rec) # Feature D does not intersect any CNV
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
-
-    def testEmptyAnnotation(self):
-        """What do we get when no annotation file is provided?
-        """
-        p = sp.Popen("../bin/cnv_facets.R -p data/stomach_chr.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
-        stdout, stderr = p.communicate()
-        self.assertEqual(0, p.returncode)
-        
-        vcf= vcf_to_list('test_out/out.vcf.gz')
-        for rec in vcf:
-            if rec.startswith('#'):
-                continue
-            self.assertTrue('CNV_ANN=.' in rec)
-        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
 if __name__ == '__main__':
     unittest.main()
