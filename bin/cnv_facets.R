@@ -384,6 +384,8 @@ readSnpMatrix2<- function(pileup, gbuild){
 }
 
 facetsRecordToVcf<- function(x){
+    stopifnot(is.data.table(x))
+    stopifnot(nrow(x) == 1)
     # Convert the annotated facets record to a VCF record.
     vcf<- vector(length= 8)
     vcf[1]<- x$chrom
@@ -441,11 +443,14 @@ annotate<- function(cnv, bed_file){
     ann[, name := gsub('|', '%7C', name, fixed= TRUE)]
     ann[, name := gsub(' ', '_', name, fixed= TRUE)] # NB: Not URL encoding for spaces!
 
-    ann<- makeGRangesFromDataFrame(ann, seqnames.field= 'chrom', start.field= 'start', end.field= 'end', keep.extra.columns= TRUE)
+    ann<- makeGRangesFromDataFrame(ann, seqnames.field= 'chrom', 
+        start.field= 'start', end.field= 'end', keep.extra.columns= TRUE,
+        starts.in.df.are.0based= TRUE)
 
     gcnv<- makeGRangesFromDataFrame(cnv, seqnames.field= 'chrom', start.field= 'start', end.field= 'end', keep.extra.columns= TRUE)
-    ovl<- findOverlaps(query= gcnv, subject= ann, ignore.strand= TRUE)
-
+    suppressWarnings({
+        ovl<- findOverlaps(query= gcnv, subject= ann, ignore.strand= TRUE)
+    })
     hits<- data.table(queryHits= ovl@from, subjectHits= ovl@to, feature= ann$name[ovl@to])
     hits<- hits[, list(feature= paste(feature,  collapse= ',')), by= queryHits]
     gcnv<- as.data.table(gcnv)
@@ -458,7 +463,8 @@ annotate<- function(cnv, bed_file){
     stopifnot(cnv$chrom == gcnv$chrom)
     stopifnot(cnv$start == gcnv$start)
     stopifnot(cnv$end == gcnv$end)
-    return(gcnv)
+    cnv[, annotation := gcnv$annotation]
+    return(cnv)
 }
 
 make_header<- function(gbuild, genomes, is_chrom_prefixed, cmd, extra){
@@ -531,6 +537,7 @@ classify_cnv<- function(dat){
     dat[, type := ifelse(is.na(type) & tcn.em == 2 & lcn.em == 0, 'LOH', type)]
     dat[, type := ifelse(is.na(type) & tcn.em > 2 & lcn.em == 0, 'DUP-LOH', type)]
     stopifnot(all(!is.na(dat$type))) # Everything has been classified
+
     return(dat)
 }
 
@@ -563,6 +570,7 @@ plot_coverage<- function(rcmat, rcmat_flt, fname, title){
         xlab('Filtered positions [capped]') + 
         theme(axis.title.x = element_text(colour = "#00BFC4"))
 
+    pdf(NULL) # Prevent Rplots.pdf to be generated
     gg<- arrangeGrob(xall, xflt, top= title)
     ggsave(fname, gg, width= 16, height= 18, units= 'cm')
 }
@@ -593,6 +601,82 @@ filter_rcmat<- function(rcmat, min_ndepth, max_ndepth, target_bed){
     # https://cran.r-project.org/web/packages/data.table/vignettes/datatable-faq.html#why-do-i-have-to-type-dt-sometimes-twice-after-using-to-print-the-result-to-console
     rcmat_flt[]
     return(rcmat_flt)
+}
+
+run_facets<- function(
+            pre_rcmat,
+            pre_gbuild,
+            pre_snp.nbhd,
+            pre_het.thresh,
+            pre_cval,
+            pre_deltaCN,
+            pre_unmatched,
+            pre_ndepth,
+            pre_ndepthmax,
+
+            proc_cval,
+            proc_min.nhet,
+            proc_dipLogR,
+            
+            emcncf_unif,
+            emcncf_min.nhet,
+            emcncf_maxiter,
+            emcncf_eps
+    ){
+    # Run the core functions of facets for segmentation, purity etc.
+    # Here is where the actual CNV discovery happen.
+    # Param prefix matches the facets function they go to.
+    write(sprintf('Preprocessing sample...'), stderr())
+    
+    xx<- preProcSample(
+           rcmat=      pre_rcmat,
+           gbuild=     pre_gbuild, 
+           snp.nbhd=   pre_snp.nbhd, 
+           het.thresh= pre_het.thresh, 
+           cval=       pre_cval, 
+           deltaCN=    pre_deltaCN, 
+           unmatched=  pre_unmatched, 
+           ndepth=     pre_ndepth,    
+           ndepthmax=  pre_ndepthmax
+    )
+    rcmat_flt<- NULL
+    x_ <- gc(verbose= FALSE)
+
+    write(sprintf('Processing sample...'), stderr())
+    proc_out<- procSample(xx, 
+                          cval=     proc_cval, 
+                          min.nhet= proc_min.nhet, 
+                          dipLogR=  proc_dipLogR)
+    proc_out$jointseg<- data.table(proc_out$jointseg)
+    proc_out$out<- data.table(proc_out$out)
+
+    write(sprintf('Fitting model...'), stderr())
+    emcncf_fit<- emcncf(x=        proc_out, 
+                        unif=     emcncf_unif, 
+                        min.nhet= emcncf_min.nhet, 
+                        maxiter=  emcncf_maxiter, 
+                        eps=      emcncf_eps)
+    emcncf_fit[['cncf']]<- data.table(emcncf_fit[['cncf']])[order(chrom, start)]
+    return(list(proc_out= proc_out, emcncf_fit= emcncf_fit))
+}
+
+reset_chroms<- function(cncf, gbuild, chr_prefix){
+    # Reset chomosome names *in-place*
+    # Reset chrom X
+    if(gbuild %in% c('hg19', 'hg38')){
+        stopifnot(length(unique(cncf$chrom)) <= 23)
+        cncf[, chrom := ifelse(chrom == 23, 'X', chrom)]
+    } else if(gbuild %in% c('mm9', 'mm10')){
+        stopifnot(length(unique(cncf$chrom)) <= 20)
+        cncf[, chrom := ifelse(chrom == 20, 'X', chrom)]
+    } else {
+        stop(sprintf('Invalid genome build: %s', gbuild))
+    }
+    # Reset chrom names
+    stopifnot(is.logical(chr_prefix))
+    if(chr_prefix == TRUE){
+        cncf[, chrom := paste0('chr', chrom)]
+    }
 }
 
 if(sys.nframe() == 0){
@@ -683,65 +767,50 @@ if(sys.nframe() == 0){
     x_ <- gc(verbose= FALSE)
 
     # ------------- [Run FACETS] --------------
-
-    write(sprintf('Preprocessing sample...'), stderr())
-    
-    xx<- preProcSample(
-           rcmat= rcmat_flt,
-           gbuild= xargs$gbuild, 
-           snp.nbhd= nbhd_snp, 
-           het.thresh= 0.25, 
-           cval= xargs$cval[1], 
-           deltaCN= 0, 
-           unmatched= FALSE, 
-           ndepth= 0,     ## We subset the input matrix instead of using ndepth*
-           ndepthmax= 1e8 ## options
-    )
-    rcmat_flt<- NULL
-    x_ <- gc(verbose= FALSE)
-
-    write(sprintf('Processing sample...'), stderr())
-    oo<- procSample(xx, cval= xargs$cval[2], min.nhet= 15, dipLogR= NULL)
-
-    write(sprintf('Fitting model...'), stderr())
-    fit<- emcncf(oo, unif= FALSE, min.nhet= 15, maxiter= 20, eps= 1e-3)
-
+    facets<- run_facets(
+           pre_rcmat=       rcmat_flt,
+           pre_gbuild=      xargs$gbuild, 
+           pre_snp.nbhd=    nbhd_snp, 
+           pre_het.thresh=  0.25, 
+           pre_cval=        xargs$cval[1], 
+           pre_deltaCN=     0, 
+           pre_unmatched=   FALSE, 
+           pre_ndepth=      1,   # We subset the input matrix instead of using ndepth*
+           pre_ndepthmax=   1e8, # options
+           proc_cval=       xargs$cval[2], 
+           proc_min.nhet=   15, 
+           proc_dipLogR=    NULL,
+           emcncf_unif=     FALSE, 
+           emcncf_min.nhet= 15,
+           emcncf_maxiter=  20,
+           emcncf_eps=      1e-3
+    ) 
     # -----------------------------------------
 
     write(sprintf('Writing output'), stderr())
-    out<- data.table(fit$cncf)
+    cncf<- copy(facets$emcncf_fit$cncf)
 
-    # Reset chrom X
-    if(xargs$gbuild %in% c('hg19', 'hg38')){
-        out[, chrom := ifelse(chrom == 23, 'X', chrom)]
-    } else if(xargs$gbuild %in% c('mm9', 'mm10')){
-        out[, chrom := ifelse(chrom == 20, 'X', chrom)]
-    } else {
-        quit(status= 1)
-    }
-    # Reset chrom names
-    if(rcmat$chr_prefix == TRUE){
-        out[, chrom := paste0('chr', chrom)]
-    }
-    setcolorder(out, c('chrom', 'start', 'end', 'seg', 'num.mark', 'nhet', 'cnlr.median', 'mafR', 'segclust', 'cnlr.median.clust', 'mafR.clust', 'cf.em', 'tcn.em', 'lcn.em'))
-    
-    classify_cnv(out)
-
-    out<- out[order(chrom, start)]
+    reset_chroms(cncf= cncf, gbuild= xargs$gbuild, chr_prefix= rcmat$chr_prefix)
+    classify_cnv(cncf)
 
     if(is.null(xargs$annotation) == FALSE){
-        out<- annotate(out, xargs$annotation)
+        annotate(cncf, xargs$annotation)
     }
 
     vcf_tmp<- tempfile(pattern= paste0(basename(xargs$out), '.'), tmpdir= dirname(xargs$out), fileext= '.vcf')
     cmd<- sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time())
-    header<- make_header(gbuild= xargs$gbuild, genomes= genomes, 
-        is_chrom_prefixed= rcmat$chr_prefix, cmd= cmd, 
-        extra= c(purity= fit$purity, ploidy= fit$ploidy, dipLogR= fit$dipLogR, emflags= fit$emflags))
+    header<- make_header(gbuild= xargs$gbuild, 
+                         genomes= genomes, 
+                         is_chrom_prefixed= rcmat$chr_prefix, 
+                         cmd= cmd, 
+                         extra= c(purity= facets$emcncf_fit$purity, 
+                                  ploidy= facets$emcncf_fit$ploidy, 
+                                  dipLogR= facets$emcncf_fit$dipLogR, 
+                                  emflags= facets$emcncf_fit$emflags))
     write(header, vcf_tmp)
 
-    for(i in 1:nrow(out)){
-        write(paste(facetsRecordToVcf(out[i]), collapse= '\t'), vcf_tmp, append= TRUE)
+    for(i in 1:nrow(cncf)){
+        write(paste(facetsRecordToVcf(cncf[i]), collapse= '\t'), vcf_tmp, append= TRUE)
     }
 
     x_<- bgzip(vcf_tmp, dest= paste0(xargs$out, '.vcf.gz'), overwrite= TRUE)
@@ -750,14 +819,14 @@ if(sys.nframe() == 0){
 
     write(sprintf('Plotting genome...'), stderr())
     png(paste0(xargs$out, '.cnv.png'), units="px", width=1600, height=1600, res=300)
-    sname<- sprintf('%s; ploidy= %.2f; purity= %.2f', basename(xargs$out), fit$ploidy, fit$purity)
-    plotSample(x=oo, emfit=fit, sname= sname)
+    sname<- sprintf('%s; ploidy= %.2f; purity= %.2f', basename(xargs$out), facets$emcncf_fit$ploidy, facets$emcncf_fit$purity)
+     plotSample(x= facets$proc_out, emfit= facets$emcncf_fit, sname= sname)
     x_ <- dev.off()
 
     write(sprintf('Plotting spider...'), stderr())
     pdf(paste0(xargs$out, '.spider.pdf'), width= 16/2.54, height= 14/2.54)
     par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
-    logRlogORspider(oo$out, oo$dipLogR)
+    logRlogORspider(facets$proc_out, facets$proc_out$dipLogR)
     x_ <- dev.off()
 
     si<- capture.output(sessionInfo())
