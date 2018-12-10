@@ -92,6 +92,7 @@ test_that("Can run facets", {
            emcncf_maxiter= 20,
            emcncf_eps= 1e-3)
     expect_true(is.data.table(facets$emcncf_fit$cncf))
+    expect_true(is.null(names(facets$emcncf_fit$purity)))
 })
 
 test_that("Can convert facets record to VCF", {
