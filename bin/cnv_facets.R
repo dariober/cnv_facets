@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.10.0; facets %s', packageVersion('facets'))
+VERSION= sprintf('0.11.0; facets %s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -107,6 +107,9 @@ def<- 'hg38'
 parser$add_argument('--gbuild', '-g', help= sprintf('String indicating the reference genome build. Default %s.', def), 
     type= 'character', required= FALSE, default= def, 
     choices= c('hg19', 'hg38', 'mm9', 'mm10'))
+
+parser$add_argument('--unmatched', '-u', help= 'Normal sample is unmatched. If set, heterozygote SNPs are called using tumor\\n\\
+reads only and logOR calculations are different', action= 'store_true')
 
 def_rnd<- 'The name of the input file'
 parser$add_argument('--rnd-seed', '-s', help= sprintf('Seed for random number generator. Default: %s', def_rnd), type= 'character', default= def_rnd)
@@ -512,7 +515,6 @@ make_header<- function(gbuild, genomes, is_chrom_prefixed, cmd, extra){
     header<- c(header, '##ALT=<ID=CNV,Description="Copy number variable region">')
 
     header<- c(header, cmd)
-    # write(sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time()), vcf, append= TRUE)
     
     stopifnot(! is.null(names(extra)) )
     for(i in 1:length(extra)){
@@ -545,7 +547,6 @@ prep_coverage_data<- function(rcmat){
     # Reformat the rcmat data.table to make it suitable for plotting histogram
     dhist<- melt(data= rcmat, id= 'Position', measure.vars= c('NOR.DP', 'TUM.DP'),
         variable.name= 'sample', value.name= 'depth')
-    dhist[, foo := 'bar']
     dhist[, Position := NULL]
     dhist[, sample := ifelse(sample == 'NOR.DP', 'Normal', 'Tumour')]
     dhist<- dhist[depth > 0]
@@ -553,6 +554,7 @@ prep_coverage_data<- function(rcmat){
     nsites<- dhist[, .N, by= sample]
     dhist<- merge(dhist, nsites)
     dhist[, label := paste(sample, 'N=', N)]
+    dhist[, sample := NULL]
     return(dhist)
 }
 
@@ -573,6 +575,8 @@ plot_coverage<- function(rcmat, rcmat_flt, fname, title){
     pdf(NULL) # Prevent Rplots.pdf to be generated
     gg<- arrangeGrob(xall, xflt, top= title)
     ggsave(fname, gg, width= 16, height= 18, units= 'cm')
+    rm(xall, xflt, gg)
+    x_<- gc(verbose= FALSE) 
 }
 
 filter_rcmat<- function(rcmat, min_ndepth, max_ndepth, target_bed){
@@ -626,7 +630,7 @@ run_facets<- function(
     # Run the core functions of facets for segmentation, purity etc.
     # Here is where the actual CNV discovery happen.
     # Param prefix matches the facets function they go to.
-    write(sprintf('Preprocessing sample...'), stderr())
+    write(sprintf('[%s] Preprocessing sample...', Sys.time()), stderr())
     
     xx<- preProcSample(
            rcmat=      pre_rcmat,
@@ -639,10 +643,10 @@ run_facets<- function(
            ndepth=     pre_ndepth,    
            ndepthmax=  pre_ndepthmax
     )
-    rcmat_flt<- NULL
+    rm(pre_rcmat)
     x_ <- gc(verbose= FALSE)
 
-    write(sprintf('Processing sample...'), stderr())
+    write(sprintf('[%s] Processing sample...', Sys.time()), stderr())
     proc_out<- procSample(xx, 
                           cval=     proc_cval, 
                           min.nhet= proc_min.nhet, 
@@ -650,12 +654,14 @@ run_facets<- function(
     proc_out$jointseg<- data.table(proc_out$jointseg)
     proc_out$out<- data.table(proc_out$out)
 
-    write(sprintf('Fitting model...'), stderr())
+    write(sprintf('[%s] Fitting model...', Sys.time()), stderr())
     emcncf_fit<- emcncf(x=        proc_out, 
                         unif=     emcncf_unif, 
                         min.nhet= emcncf_min.nhet, 
                         maxiter=  emcncf_maxiter, 
                         eps=      emcncf_eps)
+    names(emcncf_fit$purity)<- NULL
+    names(emcncf_fit$ploidy)<- NULL
     emcncf_fit[['cncf']]<- data.table(emcncf_fit[['cncf']])[order(chrom, start)]
     return(list(proc_out= proc_out, emcncf_fit= emcncf_fit))
 }
@@ -707,12 +713,14 @@ if(sys.nframe() == 0){
         write('Error in argument --cval. Value for pre-processing (first argument)\nmust be lower than the value for processing (second argument)', stderr()) 
         quit(status= 1)
     }
-
+    
+    est_insert_size<- NA
     if(xargs$nbhd_snp == "auto"){
         if(!is.null(xargs$pileup)){
             nbhd_snp<- def_nbhd[2]
         } else {
             nbhd_snp<- avg_insert_size(xargs$snp_normal, default= def_nbhd[2])
+            est_insert_size<- round(nbhd_snp, 2)
         }
     } else if(is.na(as.integer(xargs$nbhd_snp))){
         write('Argument to --nbhd-snp must be "auto" or an integer', stderr())
@@ -755,26 +763,29 @@ if(sys.nframe() == 0){
         pileup<- xargs$pileup
     }
 
-    write(sprintf('Loading file %s...', pileup), stderr())
+    write(sprintf('[%s] Loading file %s...', Sys.time(), pileup), stderr())
     rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+
     rcmat_flt<- filter_rcmat(rcmat= rcmat[['pileup']], min_ndepth= xargs$depth[1], 
         max_ndepth= xargs$depth[2], target_bed= xargs$targets)
     
-    write(sprintf('Plotting histogram of coverage...'), stderr())
+    write(sprintf('[%s] Plotting histogram of coverage...', Sys.time()), stderr())
     plot_coverage(rcmat= rcmat[['pileup']], rcmat_flt= rcmat_flt, 
         fname= paste0(xargs$out, '.cov.pdf'), title= paste0('Depth of coverage\n', xargs$out))
+    
     rcmat[['pileup']]<- NULL
+    
     x_ <- gc(verbose= FALSE)
-
+    
     # ------------- [Run FACETS] --------------
     facets<- run_facets(
            pre_rcmat=       rcmat_flt,
            pre_gbuild=      xargs$gbuild, 
            pre_snp.nbhd=    nbhd_snp, 
-           pre_het.thresh=  0.25, 
+           pre_het.thresh=  ifelse(xargs$unmatched, 0.1, 0.25), 
            pre_cval=        xargs$cval[1], 
            pre_deltaCN=     0, 
-           pre_unmatched=   FALSE, 
+           pre_unmatched=   xargs$unmatched,
            pre_ndepth=      1,   # We subset the input matrix instead of using ndepth*
            pre_ndepthmax=   1e8, # options
            proc_cval=       xargs$cval[2], 
@@ -787,7 +798,7 @@ if(sys.nframe() == 0){
     ) 
     # -----------------------------------------
 
-    write(sprintf('Writing output'), stderr())
+    write(sprintf('[%s] Writing output', Sys.time()), stderr())
     cncf<- copy(facets$emcncf_fit$cncf)
 
     reset_chroms(cncf= cncf, gbuild= xargs$gbuild, chr_prefix= rcmat$chr_prefix)
@@ -799,14 +810,18 @@ if(sys.nframe() == 0){
 
     vcf_tmp<- tempfile(pattern= paste0(basename(xargs$out), '.'), tmpdir= dirname(xargs$out), fileext= '.vcf')
     cmd<- sprintf('##%sCommand=%s; Version=%s; Date=%s', getScriptName(), paste(commandArgs(), collapse= ' '), VERSION, Sys.time())
+    
+    extra<- c(purity= facets$emcncf_fit$purity, 
+              ploidy= facets$emcncf_fit$ploidy, 
+              dipLogR= facets$emcncf_fit$dipLogR, 
+              emflags= facets$emcncf_fit$emflags,
+              est_insert_size= est_insert_size)
+
     header<- make_header(gbuild= xargs$gbuild, 
                          genomes= genomes, 
                          is_chrom_prefixed= rcmat$chr_prefix, 
                          cmd= cmd, 
-                         extra= c(purity= facets$emcncf_fit$purity, 
-                                  ploidy= facets$emcncf_fit$ploidy, 
-                                  dipLogR= facets$emcncf_fit$dipLogR, 
-                                  emflags= facets$emcncf_fit$emflags))
+                         extra= extra)
     write(header, vcf_tmp)
 
     for(i in 1:nrow(cncf)){
@@ -817,13 +832,13 @@ if(sys.nframe() == 0){
     x_<- indexTabix(paste0(xargs$out, '.vcf.gz'), format= 'vcf4')
     unlink(vcf_tmp)
 
-    write(sprintf('Plotting genome...'), stderr())
+    write(sprintf('[%s] Plotting genome...', Sys.time()), stderr())
     png(paste0(xargs$out, '.cnv.png'), units="px", width=1600, height=1600, res=300)
     sname<- sprintf('%s; ploidy= %.2f; purity= %.2f', basename(xargs$out), facets$emcncf_fit$ploidy, facets$emcncf_fit$purity)
      plotSample(x= facets$proc_out, emfit= facets$emcncf_fit, sname= sname)
     x_ <- dev.off()
 
-    write(sprintf('Plotting spider...'), stderr())
+    write(sprintf('[%s] Plotting spider...', Sys.time()), stderr())
     pdf(paste0(xargs$out, '.spider.pdf'), width= 16/2.54, height= 14/2.54)
     par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
     logRlogORspider(facets$proc_out, facets$proc_out$dipLogR)
