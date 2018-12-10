@@ -23,6 +23,7 @@ Somatic copy variant caller for next generation sequencing data based on the
     * [Command options](#command-options)
     * [Filtering output for relevant CNVs](#filtering-output-for-relevant-cnvs)
 * [Time and memory footprint](#time-and-memory-footprint)
+* [Citation](#citation)
 
 <!-- vim-markdown-toc -->
 
@@ -92,7 +93,7 @@ Option 1: BAM & VCF input
 
 * A bam file of the **tumour** sample
 
-* A bam file of the **normal** sample (matched to the tumour, typically a blood
+* A bam file of the **normal** sample (typically, a blood
   sample from the same patient)
 
 * A VCF file of common, polymorphic SNPs. For human samples, a good source is
@@ -178,7 +179,9 @@ TCN_EM | Integer | Total copy number. 2 for normal diploid
 LCN_EM | Integer | Lesser (minor) copy number. 1 for normal diploid
 CNV_ANN | String | Annotation features assigned to this CNV
 
-The header of the VCF file also stores the estimates of tumour purity and ploidy.
+The header of the VCF file also stores the estimates of tumour purity and
+ploidy and the average insert size of the normal library if using paired-end
+BAM input.
 
 CNV profile plot
 ----------------
@@ -281,5 +284,9 @@ quality requires:
 * 1 hour and ~15 GB of memory for the actual detection of CNVs starting from
   the pileup. Time and memory is mostly driven by the number of SNPs
 
-This is A typical targeted sequencing datasets wi
+Citation
+========
 
+If using `cnv_facets.R` please cite the URL of this repository and the publication describing the facets
+package [FACETS: allele-specific copy number and clonal heterogeneity analysis tool for
+high-throughput DNA sequencing, *Nucleic Acids Res*, 2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
