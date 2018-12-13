@@ -2,13 +2,13 @@ sudo: false
 language: r
 dist: trusty
 
-before_install:
-    ## For manual installation of R:
-    #- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9 # To enable cran.r-project.org
-    #- echo 'deb http://cran.r-project.org/bin/linux/ubuntu trusty/' | sudo tee -a /etc/apt/sources.list
-    #- sudo apt-get -y update
-    #- sudo apt-get -y install r-base
-    - mkdir -p ~/R/library && echo '.libPaths(c("~/R/library", .libPaths()))' >> ~/.Rprofile # Pick a writable dir for R packages
+#before_install:
+#    ## For manual installation of R:
+#    #- sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9 # To enable cran.r-project.org
+#    #- echo 'deb http://cran.r-project.org/bin/linux/ubuntu trusty/' | sudo tee -a /etc/apt/sources.list
+#    #- sudo apt-get -y update
+#    #- sudo apt-get -y install r-base
+#    - mkdir -p ~/R/library && echo '.libPaths(c("~/R/library", .libPaths()))' >> ~/.Rprofile # Pick a writable dir for R packages
 
 install:
     - bash setup.sh --help
