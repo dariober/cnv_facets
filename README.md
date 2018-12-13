@@ -10,6 +10,7 @@ Somatic copy variant caller for next generation sequencing data based on the
 
 * [Quick start](#quick-start)
 * [Requirements and Installation](#requirements-and-installation)
+    * [Choosing and setting `--bin_dir`](#choosing-and-setting---bin_dir)
 * [Input](#input)
     * [Option 1: BAM & VCF input](#option-1-bam--vcf-input)
     * [Option 2: Pileup input](#option-2-pileup-input)
@@ -78,12 +79,62 @@ write, *e.g.*, `~/bin`.
 
 `setup.sh` accomplishes three main tasks:
 
-* Install any missing, required R package
+* Install any required, missing dependencies, including R packages
 
 * Compile the helper program `snp-pileup` and move it to the designated PATH
   directory unless already found on PATH
 
 * Run the test suite
+
+Choosing and setting `--bin_dir`
+-------------------------------
+
+*These instructions are general guidelines for managing programs on a Linux
+system. They are not in any way specific to* `cnv_facets`.
+
+The installation directory set with `--bin_dir` should be on the user's PATH
+and the user should have permission to write there without resorting on
+super-user rights. To see what directories are on your PATH execute:
+
+```
+echo $PATH
+```
+
+The output is a colon-separated list of directories that may look like:
+
+```
+/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+```
+
+A common directory to install custom programs such as `cnv_facets.R` is
+`~/bin`, which usually looks like `/home/<your-username>/bin` (or `$HOME/bin`
+where `$HOME` is a built-in variable holding the path to your home directory).
+This directory may already exists and be already on your PATH (check the output
+of `echo $PATH` above). If `~/bin` does not exist and/or is not on your PATH,
+create it with:
+
+```
+mkdir -p $HOME/bin
+```
+
+To add it to your PATH, open the file `~/.bash_profile` (create it if it
+doesn't exist) with your favourite text editor and append the line:
+
+```
+export PATH=$HOME/bin:$PATH
+```
+
+Save, close and reload the profile file with:
+
+```
+source ~/.bash_profile
+```
+
+Now install `cnv_facets` with:
+
+```
+bash setup.sh -b ~/bin
+```
 
 Input
 =====
