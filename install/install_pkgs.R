@@ -51,9 +51,11 @@ if(is.null(LIB)){
             .libPaths(c(LIB, .libPaths()))
         }
     }
-    if(is.null(LIB)){
-        stop(sprintf('Cannot find a writable directory to install R packages.'))
-    }
+}
+if(is.null(LIB)){
+    stop(sprintf('Cannot find a writable directory to install R packages.'))
+} else {
+    write(sprintf('Installing any missing R package to library: "%s"', LIB), stderr())
 }
 
 # -----------------------------------------------------------------------------
