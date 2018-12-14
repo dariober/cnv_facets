@@ -61,6 +61,8 @@ Get help:
 cnv_facets.R -h
 ```
 
+*In progress: bioconda*
+
 Requirements and Installation
 =============================
 
