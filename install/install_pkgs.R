@@ -30,6 +30,7 @@ REPOS<- 'https://cran.r-project.org'
 # path of R libraries
 LIB<- NULL
 
+FACETS_REF<- '434b5ce'
 # -----------------------------------------------------------------------------
 
 if(is.null(LIB)){
@@ -106,7 +107,7 @@ tryCatch({
 tryCatch({
         suppressMessages(library(facets))
     }, error = function(err) {
-        devtools::install_github("mskcc/facets", ref = "434b5ce", lib= LIB)
+        devtools::install_github("mskcc/facets", ref = FACETS_REF, lib= LIB)
     }
 )
 
