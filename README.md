@@ -1,16 +1,19 @@
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/cnv_facets/README.html)
 [![Build Status](https://travis-ci.org/wwcrc/cnv_facets.svg?branch=master)](https://travis-ci.org/wwcrc/cnv_facets)
 [![Coverage Status](https://codecov.io/gh/wwcrc/cnv_facets/branch/master/graph/badge.svg)](https://codecov.io/gh/wwcrc/cnv_facets/branch/master)
 [![Language](https://img.shields.io/badge/language-R-brightgreen.svg)](https://cran.r-project.org/)
 [![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/wwcrc/cnv_facets)
 
-Somatic copy variant caller for next generation sequencing data based on the
-[FACETS](https://github.com/mskcc/facets) package
+Detect somatic copy number variants (CNV) in tumour-normal samples using the
+[facets](https://github.com/mskcc/facets) package
 
 <!-- vim-markdown-toc GFM -->
 
+* [Purpose](#purpose)
 * [Quick start](#quick-start)
 * [Requirements and Installation](#requirements-and-installation)
-    * [Choosing and setting `--bin_dir`](#choosing-and-setting---bin_dir)
+    * [Install via bioconda (recommended)](#install-via-bioconda-recommended)
+    * [Install via setup script](#install-via-setup-script)
 * [Input](#input)
     * [Option 1: BAM & VCF input](#option-1-bam--vcf-input)
     * [Option 2: Pileup input](#option-2-pileup-input)
@@ -28,28 +31,35 @@ Somatic copy variant caller for next generation sequencing data based on the
 
 <!-- vim-markdown-toc -->
 
-**cnv_facets.R** detects somatic Copy Number Variants (CNVs) from next
-generation sequencing data such as **whole genome**, **whole exome** and
-**targeted sequencing** experiments. In addition, it estimates tumour purity
-and ploidy.  The core of *cnv_facets.R* is the
-[FACETS](https://github.com/mskcc/facets) package by R Shen and VE Seshan
+Purpose
+=======
+
+*cnv_facets* detects somatic copy number variants (CNVs), *i.e.*, variants
+private to a tumour sample given a matched or unmatched normal sample.
+*cnv_facets* uses next generation sequencing data from **whole genome (WGS)**,
+**whole exome (WEX)** and **targeted (panel)** sequencing experiments. In
+addition, it estimates tumour purity and ploidy. 
+
+The core of *cnv_facets* is the
+[facets](https://github.com/mskcc/facets) package by R Shen and VE Seshan
 [FACETS: allele-specific copy number and clonal heterogeneity analysis tool for
 high-throughput DNA sequencing, *Nucleic Acids Res*, 2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
 
-The advantage of **cnv_facets.R** over the original [FACETS](https://github.com/mskcc/facets) 
-package is in the convenience of executing all the necessary steps, from BAM input to VCF 
-output, in a single command line call.
+The advantage of *cnv_facets* over the original
+[facets](https://github.com/mskcc/facets) package is the convenience of
+executing all the necessary steps, from BAM input to VCF output, in a single
+command line call.
 
 Quick start
 ===========
 
-Install:
+Install with [bioconda](https://bioconda.github.io/recipes/cnv_facets/README.html)
 
 ```
-bash setup.sh --bin_dir </dir/on/path>
+conda install cnv_facets
 ```
 
-Run CNV analysis:
+Detect CNVs:
 
 ```
 cnv_facets.R -t <tumour.bam> -n <normal.bam> -vcf <snps.vcf.gz> -o <output_prefix>
@@ -61,13 +71,46 @@ Get help:
 cnv_facets.R -h
 ```
 
-*In progress: bioconda*
-
 Requirements and Installation
 =============================
 
-cnv_facets.R requires a reasonably recent version of
-[R](https://cran.r-project.org/) on a `*Nix` operating system. At the time of
+`cnv_facets` runs on the Linux operating system. Windows is not supported 
+and MacOS could work but some tweaks are necessary.
+
+Install via bioconda (recommended)
+----------------------------------
+
+Installation via the [conda](https://conda.io/docs/) package manager is the
+recommended route. Options `-c bioconda -c conda-forge` can be omitted if
+bioconda and conda-forge are already registered channels (see below):
+
+```
+conda install -c bioconda -c conda-forge cnv_facets
+```
+
+If the above fails with `conda: command not found` or similar, install conda first.
+Follow the official
+[documentation](https://conda.io/docs/user-guide/install/linux.html) but
+basically, these commands should suite most users:
+
+```
+# See https://conda.io/miniconda.html
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# Run and follow the prompt on screen
+bash Miniconda3-latest-Linux-x86_64.sh
+
+# Add some useful package repositories
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+```
+
+Install via setup script
+------------------------
+
+*cnv_facets* requires a reasonably recent version of
+[R](https://cran.r-project.org/) on a Linux operating system. At the time of
 this writing, it has been developed and deployed on R 3.5 on CentOS 7.
 
 To compile and install execute:
@@ -79,70 +122,13 @@ bash setup.sh --bin_dir </dir/on/path>
 Where `/dir/on/path` is a directory on your PATH where you have permission to
 write, *e.g.*, `~/bin`.
 
-`setup.sh` accomplishes three main tasks:
-
-* Install any required, missing dependencies, including R packages
-
-* Compile the helper program `snp-pileup` and move it to the designated PATH
-  directory unless already found on PATH
-
-* Run the test suite
-
-Choosing and setting `--bin_dir`
--------------------------------
-
-*These instructions are general guidelines for managing programs on a Linux
-system. They are not in any way specific to* `cnv_facets`.
-
-The installation directory set with `--bin_dir` should be on the user's PATH
-and the user should have permission to write there without resorting on
-super-user rights. To see what directories are on your PATH execute:
-
-```
-echo $PATH
-```
-
-The output is a colon-separated list of directories that may look like:
-
-```
-/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
-```
-
-A common directory to install custom programs such as `cnv_facets.R` is
-`~/bin`, which usually looks like `/home/<your-username>/bin` (or `$HOME/bin`
-where `$HOME` is a built-in variable holding the path to your home directory).
-This directory may already exists and be already on your PATH (check the output
-of `echo $PATH` above). If `~/bin` does not exist and/or is not on your PATH,
-create it with:
-
-```
-mkdir -p $HOME/bin
-```
-
-To add it to your PATH, open the file `~/.bash_profile` (create it if it
-doesn't exist) with your favourite text editor and append the line:
-
-```
-export PATH=$HOME/bin:$PATH
-```
-
-Save, close and reload the profile file with:
-
-```
-source ~/.bash_profile
-```
-
-Now install `cnv_facets` with:
-
-```
-bash setup.sh -b ~/bin
-```
-
 Input
 =====
 
 Option 1: BAM & VCF input
 -------------------------
+
+Required input files:
 
 * A bam file of the **tumour** sample
 
@@ -163,9 +149,16 @@ cnv_facets.R -t <tumour.bam> -n <normal.bam> -vcf <snps.vcf.gz> -o <output_prefi
 Option 2: Pileup input
 ----------------------
 
-* A pileup file, comma separated, of read counts for the reference and alternate allele
-  at polymorphic SNPs. This file must have the following columns (order of
-  columns is not important, additional columns are ignored):
+This pileup file is generated by `cnv_facets.R` when run with bam input as in
+option 1. If you need to explore different parameter values for CNV detection, 
+using a pre-made pileup file can save considerable computing time.
+
+Internally, `cnv_facets.R` uses `snp-pileup`, a program installed together
+with the *cnv_facets* package.
+
+The pileup is a comma separated file of read counts for the reference and
+alternate allele at polymorphic SNPs. This file must have the following columns
+(order of columns is not important, additional columns are ignored):
  
  * *Chromosome* Chromosome of the SNP
  
@@ -191,11 +184,6 @@ accompanying the original facets package:
 1,809120,N,N,66,0,0,0,105,0,0,0
 ```
 
-This pileup file is generated by `cnv_facets.R` when run with bam input as in
-option 1. Alternatively, it can be created by running `snp-pileup`. Using the
-pileup file as input instead of the bam files has the advantage of saving
-computing time.
-
 **USAGE**
 
 ```
@@ -206,7 +194,8 @@ Output
 ======
 
 The option `--out/-o <prefix>` determines the name and location of the output
-files. For more information refer to the documentation of the FACETS package.
+files. For more information refer to the documentation of the
+[facets](https://github.com/mskcc/facets) package.
 
 Variants
 --------
@@ -340,6 +329,11 @@ quality requires:
 Citation
 ========
 
-If using `cnv_facets.R` please cite the URL of this repository and the publication describing the facets
-package [FACETS: allele-specific copy number and clonal heterogeneity analysis tool for
-high-throughput DNA sequencing, *Nucleic Acids Res*, 2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
+If using *cnv_facets* please cite 
+
+* the URL of this repository and 
+
+* The publication of the facets package [FACETS: allele-specific copy
+  number and clonal heterogeneity analysis tool for high-throughput DNA
+  sequencing, *Nucleic Acids Res*,
+  2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
