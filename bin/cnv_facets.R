@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 #
-# Copyright (C) 2018 University of Glasgow
+# Copyright (C) 2018-2019 University of Glasgow
 #
 # Author: Dario Beraldi <dario.beraldi@glasgow.ac.uk>
 #
@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.11.3; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.12.0; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -278,7 +278,7 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
             '--pseudo-snps', pseudo_snp,
             '--min-map-quality', mapq,
             '--min-base-quality', baq,
-            '--max-depth', 10000000,
+            '--max-depth 10000000',
             '--min-read-counts', '0,0',
             chrom_vcf, output, chrom_nbam, chrom_tbam,
             '\n',

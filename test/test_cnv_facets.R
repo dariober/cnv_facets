@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Glasgow
+# Copyright (C) 2018-2019 University of Glasgow
 #
 # Author: Dario Beraldi <dario.beraldi@glasgow.ac.uk>
 #
@@ -219,19 +219,26 @@ test_that("Can estimate insert size", {
 
 test_that("Can execute pileup on chrom", {
     mkdir()
-    exec_snp_pileup(21, 'data/common.sample.vcf.gz', 'tmp_testthat/tmp.cvs.gz', 
+    exec_snp_pileup(20, 'data/common.sample.vcf.gz', 'tmp_testthat/tmp.cvs.gz', 
         normal_bam= 'data/TCRBOA6-N-WEX.sample.bam', 
         tumour_bam= 'data/TCRBOA6-T-WEX.sample.bam', 
         mapq= 10, 
         baq= 10, 
-        pseudo_snp= 250)
+        pseudo_snp= 165)
     expect_true(file.exists('tmp_testthat/tmp.cvs.gz'))
     expect_equal(0, system2(c('gzip', '--test', 'tmp_testthat/tmp.cvs.gz')))
 
     csv<- read.table('tmp_testthat/tmp.cvs.gz', sep= ',', header= TRUE)
     expect_equal(12, ncol(csv))
     expect_true(nrow(csv) > 1000)
-    expect_equal(21, unique(csv$Chromosome)) 
+    expect_equal(20, unique(csv$Chromosome)) 
+
+    # Coverage at this position. Checked with:
+    # samtools mpileup data/TCRBOA6-T-WEX.sample.bam -r 20:25058550 | head
+    expect_equal(54, csv[csv$Position ==  25058550, "File1R"])
+    expect_equal(0, csv[csv$Position ==  25058550, "File1A"])
+    expect_equal(65, csv[csv$Position ==  25058550, "File2R"])
+    expect_equal(0, csv[csv$Position ==  25058550, "File2A"])
 })
 
 test_that("Can execute parallel pileup", {

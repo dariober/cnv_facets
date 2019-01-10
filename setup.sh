@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (C) 2018 University of Glasgow
+# Copyright (C) 2018-2019 University of Glasgow
 #
 # Author: Dario Beraldi <dario.beraldi@glasgow.ac.uk>
 #
