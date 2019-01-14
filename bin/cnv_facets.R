@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.12.0; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.12.1; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -92,12 +92,12 @@ parser$add_argument('--cval', '-cv', help= sprintf("Critical values for segmenta
 Larger values reduce segmentation. [25 150] is facets default based on exome data. For whole genome\\n\\
 consider increasing to [25 400] and for targeted sequencing consider reducing them. Default %s", paste(def, collapse= ' ')), type= 'double', default= def, nargs= 2)
 
-def_nbhd<- c('auto', 250)
+def_nbhd<- list('auto', 250)
 parser$add_argument('--nbhd-snp', '-snp', help= sprintf('If an interval of size nbhd-snp contains more than one SNP, sample a random one.\\n\\
 This sampling reduces the SNP serial correlation. This value should be similar\\n\\
 to the median insert size of the libraries. If "auto" and if using paired\\n\\
 end BAM input, use the estimated insert size from the normal bam file. Otherwise use\\n\\
-250. Default %s', def_nbhd[1]), type= 'character', default= def_nbhd[1])
+250. Default %s', def_nbhd[[1]]), type= 'character', default= def_nbhd[[1]])
 
 parser$add_argument('--annotation', '-a', help= sprintf('Optional annotation file in BED format where the 4th column contains the\\n\\
 feature name (e.g. gene name). CNVs will be annotated with an additional \\n\\
@@ -242,7 +242,7 @@ avg_insert_size<- function(bam, default){
         n_reads<- c(n_reads, n)
     }
     if(length(n_reads) == 0){
-        return(default)
+        return(as.numeric(default))
     }
     return(weighted.mean(ins_size, n_reads))
 }
@@ -717,9 +717,9 @@ if(sys.nframe() == 0){
     est_insert_size<- NA
     if(xargs$nbhd_snp == "auto"){
         if(!is.null(xargs$pileup)){
-            nbhd_snp<- def_nbhd[2]
+            nbhd_snp<- def_nbhd[[2]]
         } else {
-            nbhd_snp<- avg_insert_size(xargs$snp_normal, default= def_nbhd[2])
+            nbhd_snp<- avg_insert_size(xargs$snp_normal, default= def_nbhd[[2]])
             est_insert_size<- round(nbhd_snp, 2)
         }
     } else if(is.na(as.integer(xargs$nbhd_snp))){
