@@ -1,8 +1,8 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/cnv_facets/README.html)
-[![Build Status](https://travis-ci.org/wwcrc/cnv_facets.svg?branch=master)](https://travis-ci.org/wwcrc/cnv_facets)
-[![Coverage Status](https://codecov.io/gh/wwcrc/cnv_facets/branch/master/graph/badge.svg)](https://codecov.io/gh/wwcrc/cnv_facets/branch/master)
+[![Build Status](https://travis-ci.org/dariober/cnv_facets.svg?branch=master)](https://travis-ci.org/dariober/cnv_facets)
+[![Coverage Status](https://codecov.io/gh/dariober/cnv_facets/branch/master/graph/badge.svg)](https://codecov.io/gh/dariober/cnv_facets/branch/master)
 [![Language](https://img.shields.io/badge/language-R-brightgreen.svg)](https://cran.r-project.org/)
-[![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/wwcrc/cnv_facets)
+[![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/dariober/cnv_facets)
 
 Detect somatic copy number variants (CNV) in tumour-normal samples using the
 [facets](https://github.com/mskcc/facets) package
