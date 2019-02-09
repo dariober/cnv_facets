@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.12.1; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.13.0; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -841,7 +841,7 @@ if(sys.nframe() == 0){
     write(sprintf('[%s] Plotting spider...', Sys.time()), stderr())
     pdf(paste0(xargs$out, '.spider.pdf'), width= 16/2.54, height= 14/2.54)
     par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
-    logRlogORspider(facets$proc_out, facets$proc_out$dipLogR)
+    logRlogORspider(facets$proc_out$out, facets$proc_out$dipLogR)
     x_ <- dev.off()
 
     si<- capture.output(sessionInfo())
