@@ -1,6 +1,8 @@
 sudo: false
-language: r
 dist: trusty
+language: r
+r:
+    - 3.5.0
 
 install:
     - bash setup.sh --help
