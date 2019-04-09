@@ -224,7 +224,8 @@ test_that("Can execute pileup on chrom", {
         tumour_bam= 'data/TCRBOA6-T-WEX.sample.bam', 
         mapq= 10, 
         baq= 10, 
-        pseudo_snp= 165)
+        pseudo_snp= 165,
+        keep_orphans= FALSE)
     expect_true(file.exists('tmp_testthat/tmp.cvs.gz'))
     expect_equal(0, system2(c('gzip', '--test', 'tmp_testthat/tmp.cvs.gz')))
 
@@ -250,7 +251,8 @@ test_that("Can execute parallel pileup", {
         mapq= 10, 
         baq= 10, 
         pseudo_snp= 250,
-        nprocs= 3)
+        nprocs= 3,
+        keep_orphans= FALSE)
     expect_true(file.exists('tmp_testthat/tmp.cvs.gz'))
     csv<- fread('gzip -c -d tmp_testthat/tmp.cvs.gz')
     expect_equal(3, length(unique(csv$Chromosome)))
@@ -264,7 +266,8 @@ test_that("Pileup throws error if bash script throws error", {
             tumour_bam= 'data/TCRBOA6-T-WEX.sample.bam', 
             mapq= 10, 
             baq= 10, 
-            pseudo_snp= 250)
+            pseudo_snp= 250,
+            keep_orphans= FALSE)
     )
 })
 

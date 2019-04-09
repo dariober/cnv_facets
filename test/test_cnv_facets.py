@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2018-2019 University of Glasgow
 #
@@ -44,7 +44,7 @@ def vcf_validator(vcf_file):
     """Run vcf_validator and scan the report file. Return empty string if vcf
     file is valid otherwise print the content of the report
     """
-    p = sp.Popen("gzip -c -d %s | ./vcf_validator --report text" % vcf_file, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+    p = sp.Popen("export LC_ALL=C; gzip -c -d %s | ./vcf_validator --report text" % vcf_file, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
     stdout, stderr = p.communicate()
     log= stderr.decode().split('\n')
     rfile= [x for x in log if x.startswith('[info] Text report written to : ')]
@@ -85,6 +85,42 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
         self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
+    def testBamInputNotProperlyPaired(self):
+        # Prepare a bam files with 'properly paired' flag removed
+        p = sp.Popen(r"""
+samtools view -h data/TCRBOA6-N-WEX.sample.bam \
+| awk -v FS='\t' -v OFS='\t' '$1 ~ "^@" || $2 ~ "99|83|163|147" {if($1 ~ "^@"){print $0} else {$2=$2-2; print $0}}' \
+| samtools view -b - > tmp.n.bam &&
+samtools index tmp.n.bam &&
+
+samtools view -h data/TCRBOA6-T-WEX.sample.bam \
+| awk -v FS='\t' -v OFS='\t' '$1 ~ "^@" || $2 ~ "99|83|163|147" {if($1 ~ "^@"){print $0} else {$2=$2-2; print $0}}' \
+| samtools view -b - > tmp.t.bam &&
+samtools index tmp.t.bam 
+                """, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        assert 0 == p.returncode
+
+        p = sp.Popen(r"""
+../bin/cnv_facets.R -d 1 8000 -t tmp.t.bam -n tmp.n.bam -vcf data/common.sample.vcf.gz -o test_out/out
+                """, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(1, p.returncode)
+        self.assertTrue(os.path.exists('test_out/out.csv.gz'))
+        os.remove('test_out/out.csv.gz')
+
+        p = sp.Popen(r"""
+../bin/cnv_facets.R --snp-count-orphans -d 1 8000 -t tmp.t.bam -n tmp.n.bam -vcf data/common.sample.vcf.gz -o test_out/out
+                """, shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(0, p.returncode)
+        self.assertTrue(os.path.exists('test_out/out.csv.gz'))
+        self.assertTrue(os.path.getsize("test_out/out.csv.gz") > 60000)
+        self.assertTrue(os.path.getsize("test_out/out.vcf.gz") > 1000)
+
+        for x in ['tmp.n.bam', 'tmp.n.bam.bai', 'tmp.t.bam', 'tmp.t.bam.bai']:
+            os.remove(x)
+
     def testPileupInput(self):
         p = sp.Popen("../bin/cnv_facets.R --pileup data/stomach.csv.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
@@ -96,11 +132,12 @@ class cnv_facets(unittest.TestCase):
         self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
     def testFailOnSnpPileup(self):
-        p = sp.Popen("../bin/cnv_facets.R -t data/INVALID.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        p = sp.Popen("../bin/cnv_facets.R -t data/INVALID.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out", 
+                shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
         stdout, stderr = p.communicate()
         self.assertTrue(p.returncode != 0)
         # Check we exited immediatly after failing the first snp-pileup
-        self.assertEqual(1, stderr.count('samtools view: failed to open'))
+        self.assertEqual(1, stderr.count(b'samtools view: failed to open'))
 
     def testSingleEndBam(self):
         # Prepare single-end files
