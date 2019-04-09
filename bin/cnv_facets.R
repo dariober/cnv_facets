@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.13.0; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.14.0; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -71,6 +71,9 @@ parser$add_argument('--snp-mapq', '-mq', help= sprintf('Sets the minimum thresho
 
 def<- 10
 parser$add_argument('--snp-baq', '-bq', help= sprintf('Sets the minimum threshold for base quality. Default %s', def), required= FALSE, default= def, type= 'integer')
+
+parser$add_argument('--snp-count-orphans', '-A', 
+    help= 'Do not discard anomalous read pairs', action= 'store_true')
 
 def<- 1
 parser$add_argument('--snp-nprocs', '-N', help= sprintf('Number of parallel processes to run to prepare the read pileup file.\\n\\
@@ -247,7 +250,7 @@ avg_insert_size<- function(bam, default){
     return(weighted.mean(ins_size, n_reads))
 }
 
-exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp){
+exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, keep_orphans){
     # Execute snp-pileup on chromosome `chrom` 
     # Send tmp output to the same directory of the final output so we are sure
     # we can write there. 
@@ -256,6 +259,12 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     chrom_nbam<- file.path(d, paste0(sub('\\.bam', '', basename(normal_bam)), '.', chrom, '.bam'))
     chrom_tbam<- file.path(d, paste0(sub('\\.bam', '', basename(tumour_bam)), '.', chrom, '.bam'))
 
+    if(keep_orphans) {
+        orphans<- '--count-orphans'
+    } else {
+        orphans<- ''
+    }
+       
     cmd<- c('#!/bin/bash', '\n',
             '\n',
             'set -eo pipefail', '\n',
@@ -273,13 +282,14 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
             'samtools view -u', tumour_bam, chrom, '>', chrom_tbam, '&\n',
             'pid_tbam=$!', '\n',
             '\n',
-            'snp-pileup',
+            'snp-pileup', 
             '--gzip',
             '--pseudo-snps', pseudo_snp,
             '--min-map-quality', mapq,
             '--min-base-quality', baq,
             '--max-depth 10000000',
             '--min-read-counts', '0,0',
+            orphans,
             chrom_vcf, output, chrom_nbam, chrom_tbam,
             '\n',
             'set +e', '\n',
@@ -304,7 +314,7 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     return(cmd)
 }
 
-exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs){
+exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs, keep_orphans){
     
     dtm<- format(Sys.time(), "%y%m%d-%H%M%S")
     tmpdir<- tempfile(pattern = paste0(basename(sub('\\.cvs\\.gz$', '', output)), '_', dtm, '_'), tmpdir = dirname(output))
@@ -322,7 +332,8 @@ exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, map
                               tumour_bam= tumour_bam, 
                               mapq= mapq, 
                               baq= baq, 
-                              pseudo_snp= pseudo_snp)
+                              pseudo_snp= pseudo_snp,
+                              keep_orphans= keep_orphans)
         return(chrom_csv)
     })
     stopCluster(cl)
@@ -757,7 +768,8 @@ if(sys.nframe() == 0){
                                  mapq= xargs$snp_mapq, 
                                  baq= xargs$snp_baq, 
                                  pseudo_snp= nbhd_snp,
-                                 nprocs= ceiling(xargs$snp_nprocs / 2)
+                                 nprocs= ceiling(xargs$snp_nprocs / 2),
+                                 keep_orphans= xargs$snp_count_orphans
                                  )
     } else {
         pileup<- xargs$pileup
@@ -765,6 +777,10 @@ if(sys.nframe() == 0){
 
     write(sprintf('[%s] Loading file %s...', Sys.time(), pileup), stderr())
     rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+    if(nrow(rcmat$pileup) == 0){
+        write(sprintf('[%s] Analysis stopped: pileup file %s has no records', Sys.time(), pileup), stderr())
+        quit(status= 1)
+    }
 
     rcmat_flt<- filter_rcmat(rcmat= rcmat[['pileup']], min_ndepth= xargs$depth[1], 
         max_ndepth= xargs$depth[2], target_bed= xargs$targets)
