@@ -140,6 +140,8 @@ Required input files:
   [common_all.vcf.gz](https://www.ncbi.nlm.nih.gov/variation/docs/human_variation_vcf/). 
   See also NCBI [human variation sets in VCF Format](https://www.ncbi.nlm.nih.gov/variation/docs/human_variation_vcf/).
 
+BAM and VCF files must be sorted and indexed. 
+
 **USAGE**
 
 ```
