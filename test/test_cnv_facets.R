@@ -168,12 +168,13 @@ test_that("Can read SNP pileup", {
 
 test_that("Can filter read count matrix", {
     rcmat<- fread('gzip -c -d data/rcmat.txt.gz')
+    targets<- read.table('data/targets.bed', comment.char= '#', header= FALSE, sep= '\t')
     flt<- filter_rcmat(rcmat, min_ndepth= 60, max_ndepth= 200, target= NULL)
     expect_equal(60, min(flt$NOR.DP))    
     expect_equal(199, max(flt$NOR.DP))    
     expect_true(nrow(flt) > 1000)
     
-    flt<- filter_rcmat(rcmat, min_ndepth= 115, max_ndepth= 2000, target= 'data/targets.bed')
+    flt<- filter_rcmat(rcmat, min_ndepth= 115, max_ndepth= 2000, target= targets)
     expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
     expect_equal(115, min(flt$NOR.DP))
     expect_equal(69515, min(flt$Position))
@@ -181,11 +182,11 @@ test_that("Can filter read count matrix", {
     expect_equal(10, nrow(flt))
 
     ## Test overlap or depth returns 0 positions
-    flt<- filter_rcmat(rcmat, min_ndepth= 10000, max_ndepth= 11000, target= 'data/targets.bed')
+    flt<- filter_rcmat(rcmat, min_ndepth= 10000, max_ndepth= 11000, target= targets)
     expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
     expect_equal(0, nrow(flt))
 
-    flt<- filter_rcmat(rcmat[Position > 1000000], min_ndepth= 1, max_ndepth= 11000, target= 'data/targets.bed')
+    flt<- filter_rcmat(rcmat[Position > 1000000], min_ndepth= 1, max_ndepth= 11000, target= targets)
     expect_true(all(c('Chromosome', 'Position', 'NOR.DP', 'NOR.RD', 'TUM.DP', 'TUM.RD') == names(flt)))
     expect_equal(0, nrow(flt))
 })

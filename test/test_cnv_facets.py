@@ -30,14 +30,13 @@ import sys
 import gzip
 import re
 import filecmp
-import gzip
 from collections import OrderedDict
 
 def vcf_to_list(vcf_file):
     vcf= []
     with gzip.open(vcf_file) as gz:
         for line in gz:
-            vcf.append(line.decode())
+            vcf.append(line.decode().strip().split('\t'))
     return vcf
 
 def vcf_validator(vcf_file):
@@ -138,6 +137,45 @@ samtools index tmp.t.bam
         self.assertTrue(p.returncode != 0)
         # Check we exited immediatly after failing the first snp-pileup
         self.assertEqual(1, stderr.count(b'samtools view: failed to open'))
+
+    def testTargetPanel(self):
+        p = sp.Popen("../bin/cnv_facets.R -T data/stomach_targets_chr.bed -p data/stomach_chr.csv.gz -o test_out/out",
+                shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(0, p.returncode)
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
+        vcf= vcf_to_list('test_out/out.vcf.gz')
+        vcf= [line for line in vcf if not line[0].startswith('#')]
+        chroms= set([line[0] for line in vcf])
+        self.assertTrue('chr1' in chroms)
+        self.assertTrue('chr2' in chroms)
+        self.assertTrue('chr3' in chroms)
+        self.assertTrue('chr4' in chroms)
+        self.assertTrue('chrX' in chroms)
+        self.assertTrue('chr11' not in chroms)
+        self.assertTrue('chr12' not in chroms)
+        self.assertTrue('chr13' not in chroms)
+        
+        chr1= [line for line in vcf if line[0] == 'chr1']
+        self.assertTrue(int(chr1[0][1]) >  1000000)
+        self.assertTrue(int(chr1[len(chr1)-1][1]) < 100000000)
+
+        # Without chr prefix
+        p = sp.Popen("../bin/cnv_facets.R -T data/stomach_targets.bed -p data/stomach.csv.gz -o test_out/out",
+                shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(0, p.returncode)
+        self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
+
+        vcf= vcf_to_list('test_out/out.vcf.gz')
+        vcf= [line for line in vcf if not line[0].startswith('#')]
+        chroms= set([line[0] for line in vcf])
+        self.assertTrue('1' in chroms)
+        self.assertTrue('13' not in chroms)
+        
+        chr1= [line for line in vcf if line[0] == '1']
+        self.assertTrue(int(chr1[0][1]) >  1000000)
+        self.assertTrue(int(chr1[len(chr1)-1][1]) < 100000000)
 
     def testSingleEndBam(self):
         # Prepare single-end files
