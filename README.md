@@ -140,6 +140,8 @@ Required input files:
   [common_all.vcf.gz](https://www.ncbi.nlm.nih.gov/variation/docs/human_variation_vcf/). 
   See also NCBI [human variation sets in VCF Format](https://www.ncbi.nlm.nih.gov/variation/docs/human_variation_vcf/).
 
+BAM and VCF files must be sorted and indexed. 
+
 **USAGE**
 
 ```
@@ -321,7 +323,7 @@ quality requires:
 
 * 5 hours to prepare the SNP pileup with small memory footprint. Time is mostly
   driven by the size of the BAM files. To speed-up the pileup consider the 
-  option `--ncores` to parallelize across chromosomes.
+  option `--snp-nprocs` to parallelize across chromosomes.
 
 * 1 hour and ~15 GB of memory for the actual detection of CNVs starting from
   the pileup. Time and memory is mostly driven by the number of SNPs

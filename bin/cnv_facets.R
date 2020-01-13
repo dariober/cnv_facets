@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.13.0; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.15.0; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -56,7 +56,7 @@ See the online documentation for more details and usage.\\n\\
 Version %s', VERSION)
 
 epilog<- 'Options --snp-* are used only to generate the pileup file. They are ignored with option --pileup'
-
+                        
 parser<- ArgumentParser(description= docstring, formatter_class= 'argparse.RawTextHelpFormatter', epilog= epilog)
 
 parser$add_argument('--out', '-o', help= 'Output prefix for the output files', required= TRUE)
@@ -67,52 +67,73 @@ parser$add_argument('--snp-normal', '-n', help= 'BAM file for normal sample', re
 parser$add_argument('--snp-vcf', '-vcf', help= 'VCF file of SNPs where pileup is to be computed', required= FALSE)
 
 def<- 5
-parser$add_argument('--snp-mapq', '-mq', help= sprintf('Sets the minimum threshold for mapping quality. Default %s', def), required= FALSE, default= def, type= 'integer')
+parser$add_argument('--snp-mapq', '-mq', help= sprintf(
+'Sets the minimum threshold for mapping quality. Default %s', def), required= FALSE, default= def, type= 'integer')
 
 def<- 10
-parser$add_argument('--snp-baq', '-bq', help= sprintf('Sets the minimum threshold for base quality. Default %s', def), required= FALSE, default= def, type= 'integer')
+parser$add_argument('--snp-baq', '-bq', help= sprintf(
+'Sets the minimum threshold for base quality. Default %s', def), required= FALSE, default= def, type= 'integer')
+
+parser$add_argument('--snp-count-orphans', '-A', help= 
+'Do not discard anomalous read pairs', action= 'store_true')
 
 def<- 1
-parser$add_argument('--snp-nprocs', '-N', help= sprintf('Number of parallel processes to run to prepare the read pileup file.\\n\\
+parser$add_argument('--snp-nprocs', '-N', help= sprintf(
+'Number of parallel processes to run to prepare the read pileup file.\\n\\
 Each chromsome is assigned to a process. Default %s', def), required= FALSE, default= def, type= 'integer')
 
-parser$add_argument('--pileup', '-p', help= 'Pileup for matched normal (first sample) and tumour (second sample). \\n\\
-Not needed if using BAM input. This file is the <prefix>.cvs.gz output of\\n\\
-of a previous run of cnv_facet.R', required= FALSE)
+parser$add_argument('--pileup', '-p', help= 
+'Pileup for matched normal (first sample) and tumour\\n\\
+(second sample). Not needed if using BAM input. This file\\n\\
+is the <prefix>.cvs.gz output of of a previous run of cnv_facet.R', required= FALSE)
 
 def<- c(25, 4000)
-parser$add_argument('--depth', '-d', help= sprintf('Minimum and maximum depth in normal sample for a position to be considered. Default %s', paste(def, collapse= ' ')), type= 'integer', default= def, nargs= 2)
+parser$add_argument('--depth', '-d', help= sprintf(
+'Minimum and maximum depth in normal sample for a position\\n\\
+to be considered. Default %s', 
+    paste(def, collapse= ' ')), type= 'integer', default= def, nargs= 2)
 
-parser$add_argument('--targets', '-T', help= sprintf('BED file of target regions to scan. It may be the target regions from WEX or\\n\\
-panel sequencing protocols. It is not required, even for targeted sequencing,\\n\\
-but it may improve the results'))
+parser$add_argument('--targets', '-T', help= sprintf(
+'BED file of target regions to scan. It may be the target regions\\n\\
+from WEX or panel sequencing protocols. It is not required, even\\n\\
+for targeted sequencing, but it may improve the results'))
 
 def<- c(25, 150)
-parser$add_argument('--cval', '-cv', help= sprintf("Critical values for segmentation in pre-processing and processing.\\n\\
-Larger values reduce segmentation. [25 150] is facets default based on exome data. For whole genome\\n\\
-consider increasing to [25 400] and for targeted sequencing consider reducing them. Default %s", paste(def, collapse= ' ')), type= 'double', default= def, nargs= 2)
+parser$add_argument('--cval', '-cv', help= sprintf(
+"Critical values for segmentation in pre-processing and\\n\\
+processing. Larger values reduce segmentation. [25 150] is\\n\\
+facets default based on exome data. For whole genome consider\\n\\
+increasing to [25 400] and for targeted sequencing consider\\n\\
+reducing them. Default %s", paste(def, collapse= ' ')), type= 'double', default= def, nargs= 2)
 
 def_nbhd<- list('auto', 250)
-parser$add_argument('--nbhd-snp', '-snp', help= sprintf('If an interval of size nbhd-snp contains more than one SNP, sample a random one.\\n\\
-This sampling reduces the SNP serial correlation. This value should be similar\\n\\
-to the median insert size of the libraries. If "auto" and if using paired\\n\\
-end BAM input, use the estimated insert size from the normal bam file. Otherwise use\\n\\
-250. Default %s', def_nbhd[[1]]), type= 'character', default= def_nbhd[[1]])
+parser$add_argument('--nbhd-snp', '-snp', help= sprintf(
+'If an interval of size nbhd-snp contains more than one SNP,\\n\\
+sample a random one.  This sampling reduces the SNP serial\\n\\
+correlation. This value should be similar to the median insert\\n\\
+size of the libraries. If "auto" and if using paired end BAM\\n\\
+input, use the estimated insert size from the normal bam file.\\n\\
+Otherwise use 250. Default %s', def_nbhd[[1]]), type= 'character', default= def_nbhd[[1]])
 
-parser$add_argument('--annotation', '-a', help= sprintf('Optional annotation file in BED format where the 4th column contains the\\n\\
-feature name (e.g. gene name). CNVs will be annotated with an additional \\n\\
-INFO/TAG reporting all the overalapping features'), type= 'character', required= FALSE)
+parser$add_argument('--annotation', '-a', help= sprintf(
+'Optional annotation file in BED format where the 4th column\\n\\
+contains the feature name (e.g. gene name). CNVs will be\\n\\
+annotated with an additional INFO/TAG reporting all the\\n\\
+overalapping features'), type= 'character', required= FALSE)
 
 def<- 'hg38'
-parser$add_argument('--gbuild', '-g', help= sprintf('String indicating the reference genome build. Default %s.', def), 
+parser$add_argument('--gbuild', '-g', help= sprintf(
+'String indicating the reference genome build. Default %s.', def),
     type= 'character', required= FALSE, default= def, 
     choices= c('hg19', 'hg38', 'mm9', 'mm10'))
 
-parser$add_argument('--unmatched', '-u', help= 'Normal sample is unmatched. If set, heterozygote SNPs are called using tumor\\n\\
-reads only and logOR calculations are different', action= 'store_true')
+parser$add_argument('--unmatched', '-u', help= 
+'Normal sample is unmatched. If set, heterozygote SNPs are\\n\\
+called using tumor reads only and logOR calculations are different', action= 'store_true')
 
 def_rnd<- 'The name of the input file'
-parser$add_argument('--rnd-seed', '-s', help= sprintf('Seed for random number generator. Default: %s', def_rnd), type= 'character', default= def_rnd)
+parser$add_argument('--rnd-seed', '-s', help= sprintf(
+'Seed for random number generator. Default: %s', def_rnd), type= 'character', default= def_rnd)
 
 # NB: argparse v1.1.1+ required for -v option to work.
 parser$add_argument("-v", "--version", action= 'version', version= VERSION)
@@ -247,7 +268,7 @@ avg_insert_size<- function(bam, default){
     return(weighted.mean(ins_size, n_reads))
 }
 
-exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp){
+exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, keep_orphans){
     # Execute snp-pileup on chromosome `chrom` 
     # Send tmp output to the same directory of the final output so we are sure
     # we can write there. 
@@ -256,6 +277,12 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     chrom_nbam<- file.path(d, paste0(sub('\\.bam', '', basename(normal_bam)), '.', chrom, '.bam'))
     chrom_tbam<- file.path(d, paste0(sub('\\.bam', '', basename(tumour_bam)), '.', chrom, '.bam'))
 
+    if(keep_orphans) {
+        orphans<- '--count-orphans'
+    } else {
+        orphans<- ''
+    }
+       
     cmd<- c('#!/bin/bash', '\n',
             '\n',
             'set -eo pipefail', '\n',
@@ -273,13 +300,14 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
             'samtools view -u', tumour_bam, chrom, '>', chrom_tbam, '&\n',
             'pid_tbam=$!', '\n',
             '\n',
-            'snp-pileup',
+            'snp-pileup', 
             '--gzip',
             '--pseudo-snps', pseudo_snp,
             '--min-map-quality', mapq,
             '--min-base-quality', baq,
             '--max-depth 10000000',
             '--min-read-counts', '0,0',
+            orphans,
             chrom_vcf, output, chrom_nbam, chrom_tbam,
             '\n',
             'set +e', '\n',
@@ -304,7 +332,7 @@ exec_snp_pileup<- function(chrom, snp_vcf, output, normal_bam, tumour_bam, mapq,
     return(cmd)
 }
 
-exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs){
+exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, mapq, baq, pseudo_snp, nprocs, keep_orphans){
     
     dtm<- format(Sys.time(), "%y%m%d-%H%M%S")
     tmpdir<- tempfile(pattern = paste0(basename(sub('\\.cvs\\.gz$', '', output)), '_', dtm, '_'), tmpdir = dirname(output))
@@ -322,7 +350,8 @@ exec_snp_pileup_parallel<- function(snp_vcf, output, normal_bam, tumour_bam, map
                               tumour_bam= tumour_bam, 
                               mapq= mapq, 
                               baq= baq, 
-                              pseudo_snp= pseudo_snp)
+                              pseudo_snp= pseudo_snp,
+                              keep_orphans= keep_orphans)
         return(chrom_csv)
     })
     stopCluster(cl)
@@ -584,9 +613,7 @@ filter_rcmat<- function(rcmat, min_ndepth, max_ndepth, target_bed){
     if(is.null(target_bed) || nrow(rcmat_flt) == 0){
         return(rcmat_flt)
     }
-    # Read targets file
-    targets<- read.table(target_bed, comment.char= '#', header= FALSE, sep= '\t')
-    targets<- makeGRangesFromDataFrame(targets, seqnames.field= 'V1', 
+    targets<- makeGRangesFromDataFrame(target_bed, seqnames.field= 'V1', 
         start.field= 'V2', end.field= 'V3', starts.in.df.are.0based= TRUE)
 
     # Convert rcmat to GRanges
@@ -757,7 +784,8 @@ if(sys.nframe() == 0){
                                  mapq= xargs$snp_mapq, 
                                  baq= xargs$snp_baq, 
                                  pseudo_snp= nbhd_snp,
-                                 nprocs= ceiling(xargs$snp_nprocs / 2)
+                                 nprocs= ceiling(xargs$snp_nprocs / 2),
+                                 keep_orphans= xargs$snp_count_orphans
                                  )
     } else {
         pileup<- xargs$pileup
@@ -765,9 +793,25 @@ if(sys.nframe() == 0){
 
     write(sprintf('[%s] Loading file %s...', Sys.time(), pileup), stderr())
     rcmat<- readSnpMatrix2(pileup, xargs$gbuild)
+    if(nrow(rcmat$pileup) == 0){
+        write(sprintf('[%s] Analysis stopped: pileup file %s has no records', Sys.time(), pileup), stderr())
+        quit(status= 1)
+    }
 
+    # Read targets file
+    if(!is.null(xargs$targets)){
+        targets<- data.table(read.table(xargs$targets, comment.char= '#', header= FALSE, sep= '\t'))
+        if(rcmat[['chr_prefix']]){
+            # Original input has chr prefix, so we need to strip it from targets DF
+            n<- length(unique(targets$V1))
+            targets[, V1 := sub("^chr", "", V1)]
+            stopifnot(n == length(unique(targets$V1)))
+        }
+    } else {
+        targets<- NULL
+    }
     rcmat_flt<- filter_rcmat(rcmat= rcmat[['pileup']], min_ndepth= xargs$depth[1], 
-        max_ndepth= xargs$depth[2], target_bed= xargs$targets)
+        max_ndepth= xargs$depth[2], target_bed= targets)
     
     write(sprintf('[%s] Plotting histogram of coverage...', Sys.time()), stderr())
     plot_coverage(rcmat= rcmat[['pileup']], rcmat_flt= rcmat_flt, 

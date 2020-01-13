@@ -22,7 +22,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-VERSION=0.1.0
+VERSION=0.2.0
 
 set -e
 set -o pipefail
@@ -99,7 +99,7 @@ function check_bin_dir(){
     # 
     # Check `/foo/bar` is on PATH. If it is on PATH but it does not exist,
     # try to create it
-    python -c "import os, sys
+    python3 -c "import os, sys
 PATH= os.environ['PATH'].split(os.path.pathsep)
 PATH= [os.path.abspath(x) for x in PATH]
 bin= os.path.abspath('$1')
@@ -214,6 +214,7 @@ if [[ $skip_test != 1 ]]
 then
     echo -e "\n\033[1mExecuting test suite...\033[0m\n"
     cd ${cwd}/test
-    python test_cnv_facets.py
+    chmod a+x test_cnv_facets.py
+    ./test_cnv_facets.py
 fi
 
