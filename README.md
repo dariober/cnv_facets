@@ -82,9 +82,13 @@ Install via bioconda (recommended)
 
 Installation via the [conda](https://conda.io/docs/) package manager is the
 recommended route. Options `-c bioconda -c conda-forge` can be omitted if
-bioconda and conda-forge are already registered channels (see below):
+bioconda and conda-forge are already registered channels (see below). 
+It is generally not recommended to install packages in the conda base environment. Better to
+install in a dedicated envirnment. E.g.:
 
 ```
+conda create -n my_project
+conda activate my_project
 conda install -c bioconda -c conda-forge cnv_facets
 ```
 
