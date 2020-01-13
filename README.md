@@ -27,7 +27,7 @@ Detect somatic copy number variants (CNV) in tumour-normal samples using the
     * [Command options](#command-options)
     * [Filtering output for relevant CNVs](#filtering-output-for-relevant-cnvs)
 * [Time and memory footprint](#time-and-memory-footprint)
-* [Citation](#citation)
+* [Citation & Getting help](#citation--getting-help)
 
 <!-- vim-markdown-toc -->
 
@@ -326,8 +326,8 @@ quality requires:
 * 1 hour and ~15 GB of memory for the actual detection of CNVs starting from
   the pileup. Time and memory is mostly driven by the number of SNPs
 
-Citation
-========
+Citation & Getting help
+=======================
 
 If using *cnv_facets* please cite 
 
@@ -337,3 +337,14 @@ If using *cnv_facets* please cite
   number and clonal heterogeneity analysis tool for high-throughput DNA
   sequencing, *Nucleic Acids Res*,
   2016](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5027494/)
+
+Any and all comment and questions can be sent to one or more of the following
+recipients:
+
+* Open an issue at [github.com/dariober/cnv_facets)](https://github.com/dariober/cnv_facets/issues) 
+
+* For questions specific to the FACETS package and CNV calling open an issue at
+  [https://github.com/ddmskcc/facets](https://github.com/mskcc/facets/issues)
+
+* Post a question at https://www.biostars.org/ (you may want to notify me by
+  sending an email to `dario <dot> beraldi <at> gmail <dot> com`)
