@@ -222,7 +222,7 @@ CNLR_MEDIAN_CLUST | Float | Median log-ratio (logR) of the segment cluster. logR
 MAF_R | Float | Log-odds-ratio (logOR) summary for the segment. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus in the normal
 MAF_R_CLUST | Float | Log-odds-ratio (logOR) summary for the segment cluster. logOR is defined by the log-odds ratio of the variant allele count in the tumor versus that in the normal
 SEGCLUST | Integer | Segment cluster to which the segment belongs
-CF_EM | Float | Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid
+CF_EM | Float | Cellular fraction, fraction of DNA associated with the aberrant genotype. Set to 1 for normal diploid. See also issue #17
 TCN_EM | Integer | Total copy number. 2 for normal diploid
 LCN_EM | Integer | Lesser (minor) copy number. 1 for normal diploid
 CNV_ANN | String | Annotation features assigned to this CNV
