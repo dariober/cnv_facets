@@ -84,6 +84,15 @@ class cnv_facets(unittest.TestCase):
         self.assertTrue(os.path.exists('test_out/out.csv.gz'))
         self.assertEqual('', vcf_validator('test_out/out.vcf.gz'))
 
+    def testDoNotPlot(self):
+        p = sp.Popen("""../bin/cnv_facets.R --no-cov-plot -t data/TCRBOA6-T-WEX.sample.bam -n data/TCRBOA6-N-WEX.sample.bam -vcf data/common.sample.vcf.gz -o test_out/out""", shell=True, stdout= sp.PIPE, stderr= sp.PIPE)
+        stdout, stderr = p.communicate()
+        self.assertEqual(0, p.returncode)
+        self.assertTrue(os.path.exists('test_out/out.vcf.gz'))
+        self.assertTrue(os.path.exists('test_out/out.cnv.png'))
+        self.assertTrue(os.path.exists('test_out/out.spider.pdf'))
+        self.assertTrue(not os.path.exists('test_out/out.cov.pdf'))
+
     def testBamInputNotProperlyPaired(self):
         # Prepare a bam files with 'properly paired' flag removed
         p = sp.Popen(r"""

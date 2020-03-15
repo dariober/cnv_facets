@@ -31,7 +31,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.15.0; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.16.0; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
@@ -130,6 +130,10 @@ parser$add_argument('--gbuild', '-g', help= sprintf(
 parser$add_argument('--unmatched', '-u', help= 
 'Normal sample is unmatched. If set, heterozygote SNPs are\\n\\
 called using tumor reads only and logOR calculations are different', action= 'store_true')
+
+parser$add_argument('--no-cov-plot', '-np', help= 
+'Do not produce coverage plots (they can be memory intensive).\\n\\
+Other plots remain unaffected', action= 'store_true')
 
 def_rnd<- 'The name of the input file'
 parser$add_argument('--rnd-seed', '-s', help= sprintf(
@@ -812,11 +816,13 @@ if(sys.nframe() == 0){
     }
     rcmat_flt<- filter_rcmat(rcmat= rcmat[['pileup']], min_ndepth= xargs$depth[1], 
         max_ndepth= xargs$depth[2], target_bed= targets)
-    
-    write(sprintf('[%s] Plotting histogram of coverage...', Sys.time()), stderr())
-    plot_coverage(rcmat= rcmat[['pileup']], rcmat_flt= rcmat_flt, 
-        fname= paste0(xargs$out, '.cov.pdf'), title= paste0('Depth of coverage\n', xargs$out))
-    
+   
+    if(xargs$no_cov_plot == FALSE){
+        write(sprintf('[%s] Plotting histogram of coverage...', Sys.time()), stderr())
+        plot_coverage(rcmat= rcmat[['pileup']], rcmat_flt= rcmat_flt, 
+            fname= paste0(xargs$out, '.cov.pdf'), title= paste0('Depth of coverage\n', xargs$out))
+    }
+
     rcmat[['pileup']]<- NULL
     
     x_ <- gc(verbose= FALSE)
@@ -887,7 +893,7 @@ if(sys.nframe() == 0){
     par(las= 1, mar= c(3, 3, 1, 1), mgp= c(1.5, 0.5, 0), tcl= -0.3)
     logRlogORspider(facets$proc_out$out, facets$proc_out$dipLogR)
     x_ <- dev.off()
-
+    
     si<- capture.output(sessionInfo())
     write(si, stderr())
 }
