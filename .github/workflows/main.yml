@@ -24,6 +24,7 @@ jobs:
           ./test/vcf_validator --help
       - name: Run tests
         run: |
+          source ~/.bashrc
           mamba activate cnv_facets
           cd test
           Rscript testthat.R
