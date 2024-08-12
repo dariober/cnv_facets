@@ -1,0 +1,15 @@
+name: CI
+on: [push]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Conda env setup
+        run: |
+          curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+          bash Miniforge3-$(uname)-$(uname -m).sh
+
+          conda create -n cnv_facets
+          conda activate cnv_facets
+          conda install -c bioconda -c conda-forge cnv_facets
