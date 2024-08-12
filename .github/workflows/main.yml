@@ -13,6 +13,17 @@ jobs:
       - name: Install cnv_facets
         run: |
           mamba init
+          source ~/.bashrc
           mamba create --yes -n cnv_facets
           mamba activate cnv_facets
           mamba install --yes -c bioconda -c conda-forge cnv_facets
+      - name: Install vcf_validator
+        run: |
+          curl -L -o test/vcf_validator -s https://github.com/EBIvariation/vcf-validator/releases/download/v0.9.1/vcf_validator_linux
+          chmod a+x test/vcf_validator
+          ./test/vcf_validator --help
+      - name: Run tests
+        run: |
+          cd test
+          Rscript testthat.R
+          python3 test_cnv_facets.py
