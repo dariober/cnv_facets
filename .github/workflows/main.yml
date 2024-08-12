@@ -9,7 +9,9 @@ jobs:
         run: |
           curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
           bash Miniforge3-$(uname)-$(uname -m).sh -b
-
-          conda create --yes -n cnv_facets
-          conda activate cnv_facets
-          conda install --yes -c bioconda -c conda-forge cnv_facets
+          source ~/.bashrc
+      - name: Install cnv_facets
+        run: |
+          mamba create --yes -n cnv_facets
+          mamba activate cnv_facets
+          mamba install --yes -c bioconda -c conda-forge cnv_facets
