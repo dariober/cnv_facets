@@ -17,7 +17,6 @@ jobs:
           mamba create --yes -n cnv_facets
           mamba activate cnv_facets
           mamba install --yes -c bioconda -c conda-forge cnv_facets
-          mamba install --yes --freeze-installed r-testthat 
       - name: Install vcf_validator
         run: |
           curl -L -o test/vcf_validator -s https://github.com/EBIvariation/vcf-validator/releases/download/v0.9.1/vcf_validator_linux
@@ -25,6 +24,7 @@ jobs:
           ./test/vcf_validator --help
       - name: Run tests
         run: |
+          mamba activate cnv_facets
           cd test
           Rscript testthat.R
           python3 test_cnv_facets.py
