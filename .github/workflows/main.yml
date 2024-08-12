@@ -5,14 +5,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Conda env setup
-        run: |
-          curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
-          bash Miniforge3-$(uname)-$(uname -m).sh -b
-
-          cat ~/.bashrc
-
-          source ~/.bashrc
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: false
+          use-only-tar-bz2: true
+          miniforge-version: latest
       - name: Install cnv_facets
         run: |
           mamba create --yes -n cnv_facets
