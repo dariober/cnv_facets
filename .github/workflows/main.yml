@@ -2,7 +2,11 @@ name: CI
 on: [push]
 jobs:
   build-and-test:
-    runs-on: [ubuntu-latest, ubuntu-20.04]
+    name: Build & test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
