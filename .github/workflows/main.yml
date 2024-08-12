@@ -12,6 +12,8 @@ jobs:
           miniforge-version: latest
       - name: Install cnv_facets
         run: |
+          mamba init
+          source ~/.bashrc
           mamba create --yes -n cnv_facets
           mamba activate cnv_facets
           mamba install --yes -c bioconda -c conda-forge cnv_facets
