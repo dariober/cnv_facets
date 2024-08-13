@@ -53,10 +53,10 @@ command line call.
 Quick start
 ===========
 
-Install with [bioconda](https://bioconda.github.io/recipes/cnv_facets/README.html)
+Install with [mamba](https://github.com/mamba-org/mamba) from [bioconda](https://bioconda.github.io/recipes/cnv_facets/README.html) repository:
 
 ```
-conda install cnv_facets
+mamba install cnv_facets
 ```
 
 Detect CNVs:
@@ -80,34 +80,31 @@ and MacOS could work but some tweaks are necessary.
 Install via bioconda (recommended)
 ----------------------------------
 
-Installation via the [conda](https://conda.io/docs/) package manager is the
+Installation via the [mamba](https://github.com/mamba-org/mamba) package manager is the
 recommended route. Options `-c bioconda -c conda-forge` can be omitted if
 bioconda and conda-forge are already registered channels (see below). 
 It is generally not recommended to install packages in the conda base environment. Better to
 install in a dedicated envirnment. E.g.:
 
 ```
-conda create -n my_project
-conda activate my_project
-conda install -c bioconda -c conda-forge cnv_facets
+mamba create -n my_project
+mamba activate my_project
+mamba install -c bioconda -c conda-forge cnv_facets
 ```
 
-If the above fails with `conda: command not found` or similar, install conda first.
+If the above fails with `mamba: command not found` or similar, install mamba first.
 Follow the official
-[documentation](https://conda.io/docs/user-guide/install/linux.html) but
+[documentation](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html) but
 basically, these commands should suite most users:
 
 ```
-# See https://conda.io/miniconda.html
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-
-# Run and follow the prompt on screen
-bash Miniconda3-latest-Linux-x86_64.sh
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+bash Miniforge3-$(uname)-$(uname -m).sh
 
 # Add some useful package repositories
-conda config --add channels defaults
-conda config --add channels bioconda
-conda config --add channels conda-forge
+mamba config --add channels defaults
+mamba config --add channels bioconda
+mamba config --add channels conda-forge
 ```
 
 Install via setup script
