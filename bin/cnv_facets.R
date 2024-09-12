@@ -22,6 +22,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+suppressMessages(library(parallel))
 suppressMessages(library(argparse))
 suppressMessages(library(facets))
 suppressMessages(library(data.table))
@@ -31,7 +32,7 @@ suppressMessages(library(gridExtra))
 
 # -----------------------------------------------------------------------------
 
-VERSION= sprintf('0.16.0; facets=%s', packageVersion('facets'))
+VERSION= sprintf('0.16.1; facets=%s', packageVersion('facets'))
 
 docstring<- sprintf('DESCRIPTION \\n\\
 Detect somatic copy number variants (CNVs) and estimate purity and ploidy in a\\n\\
